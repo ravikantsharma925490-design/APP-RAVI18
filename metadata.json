@@ -1,0 +1,6 @@
+{
+  "name": "LiveConnect - Real-time Messaging & LiveKit Calls",
+  "description": "Production-ready real-time communication web app with 1-on-1 chat, presence, audio calls, video calls, and a complete Live Voice Room system with 8 seats, local device music sync, games, and coin gifts.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
