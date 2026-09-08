@@ -1,3 +1,5 @@
+import { getSupabase } from '@/src/lib/supabase/client';
+ 
 export interface WebRTCSessionCallbacks {
   onConnected?: () => void;
   onDisconnected?: () => void;
@@ -19,16 +21,13 @@ export interface SignalingPayload {
  
 const GLOBAL_DEFAULT_ICE_SERVERS: RTCConfiguration = {
   iceServers: [
-    // Google Anycast Global STUN Cluster (APAC, India, EU, Americas, MEA)
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
-    // Cloudflare & Mozilla Global STUNs
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:stun.services.mozilla.com' },
-    // OpenRelay Public TURN Relay for carrier NAT & strict mobile firewall traversal
     {
       urls: [
         'turn:openrelay.metered.ca:80',
@@ -47,13 +46,9 @@ const GLOBAL_DEFAULT_ICE_SERVERS: RTCConfiguration = {
  
 let cachedIceConfiguration: RTCConfiguration = GLOBAL_DEFAULT_ICE_SERVERS;
  
-// PASTE YOUR OWN METERED.CA APP NAME & API KEY HERE (dashboard.metered.ca -> your TURN app)
-// This replaces the shared/anonymous public OpenRelay credentials with a dedicated,
-// non-congested TURN allocation, which is the main fix for choppy/dropping call audio.
 const METERED_APP_NAME: string = 'liveconnect-app';
-const METERED_API_KEY: string = '0OIQnTosVCUQB4AzcpVXejlCXT7EUPOEgYbW5agNAG_4zWI4';
+const METERED_API_KEY: string = 'i6SjcYScpk8dKlaoiVBeXqo9k2rbe6lNnGo2wo7Spp5_yvoU';
  
-// Fetch fresh, dedicated TURN credentials directly from Metered (no backend needed)
 if (typeof window !== 'undefined' && METERED_API_KEY !== 'YOUR_API_KEY') {
   fetch(`https://${METERED_APP_NAME}.metered.live/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`)
     .then((r) => r.json())
@@ -61,36 +56,22 @@ if (typeof window !== 'undefined' && METERED_API_KEY !== 'YOUR_API_KEY') {
       if (Array.isArray(iceServers) && iceServers.length > 0) {
         cachedIceConfiguration = {
           ...GLOBAL_DEFAULT_ICE_SERVERS,
-          // Own dedicated TURN servers first, public STUN/OpenRelay kept only as last-resort fallback
           iceServers: [...iceServers, ...(GLOBAL_DEFAULT_ICE_SERVERS.iceServers || [])],
         };
       }
     })
-    .catch(() => {
-      // Falls back to GLOBAL_DEFAULT_ICE_SERVERS (public STUN + shared OpenRelay) automatically
-    });
+    .catch(() => {});
 }
  
-/**
- * Optimizes WebRTC SDP for high-definition studio voice and 1080p/720p HD video clarity:
- * - Prioritizes Opus as the default audio codec over legacy codecs
- * - Enables in-band Forward Error Correction (FEC) to eliminate voice crackle during packet loss
- * - Sets 64 kbps adaptive Opus bitrate for crisp, natural voice
- * - Enables Discontinuous Transmission (DTX) for VoIP optimization
- * - Enforces mono voice channel (stereo=0) to prevent comb-filtering on phone/earphone microphones
- * - Boosts HD video bitrate parameters (up to 3.5 Mbps for 1080p/720p 60/30fps clarity)
- */
 function enhanceMediaSDP(sdpText?: string): string {
   if (!sdpText) return '';
   let sdp = sdpText;
  
   try {
-    // 1. Locate Opus payload type number (typically 111)
     const opusMatch = sdp.match(/a=rtpmap:(\d+)\s+opus\/48000\/2/i);
     if (opusMatch) {
       const pt = opusMatch[1];
  
-      // Reorder m=audio line to put Opus payload type FIRST
       sdp = sdp.replace(/m=audio\s+(\d+)\s+([A-Z/]+)\s+(.+)/i, (m, port, proto, pts) => {
         const ptList = pts.trim().split(/\s+/);
         const filtered = ptList.filter((p: string) => p !== pt);
@@ -111,7 +92,6 @@ function enhanceMediaSDP(sdpText?: string): string {
               map.set(trimmed, '');
             }
           });
-          // Apply optimized studio-grade voice clarity parameters
           map.set('minptime', '10');
           map.set('ptime', '20');
           map.set('useinbandfec', '1');
@@ -121,7 +101,7 @@ function enhanceMediaSDP(sdpText?: string): string {
           map.set('cbr', '0');
           map.set('maxplaybackrate', '48000');
           map.set('sprop-maxcapturerate', '48000');
-          map.set('usedtx', '0'); // Disable DTX to prevent voice clipping on sentence starts
+          map.set('usedtx', '1');
  
           const formatted = Array.from(map.entries())
             .map(([k, v]) => (v ? `${k}=${v}` : k))
@@ -129,7 +109,7 @@ function enhanceMediaSDP(sdpText?: string): string {
           return `a=fmtp:${pt} ${formatted}`;
         });
       } else {
-        const hdParams = 'minptime=10;ptime=20;useinbandfec=1;maxaveragebitrate=96000;stereo=0;sprop-stereo=0;cbr=0;maxplaybackrate=48000;sprop-maxcapturerate=48000;usedtx=0';
+        const hdParams = 'minptime=10;ptime=20;useinbandfec=1;maxaveragebitrate=96000;stereo=0;sprop-stereo=0;cbr=0;maxplaybackrate=48000;sprop-maxcapturerate=48000;usedtx=1';
         sdp = sdp.replace(
           new RegExp(`(a=rtpmap:${pt}\\s+opus\\/48000\\/2\r?\n)`, 'i'),
           `$1a=fmtp:${pt} ${hdParams}\r\n`
@@ -137,9 +117,7 @@ function enhanceMediaSDP(sdpText?: string): string {
       }
     }
  
-    // 2. Enhance HD Video Bitrate in SDP if video media line is present
     if (sdp.includes('m=video')) {
-      // Add or replace bandwidth parameter to allocate up to 3500 kbps for HD video
       if (!sdp.includes('b=AS:')) {
         sdp = sdp.replace(/(m=video[^\r\n]+(?:\r?\n[^\r\n]+)*?)(c=IN[^\r\n]+)/, '$1$2\r\nb=AS:3500\r\nb=TIAS:3500000');
       }
@@ -163,16 +141,20 @@ export class WebRTCP2PSession {
   private isVideo: boolean = false;
   private pollInterval: any = null;
   private statsInterval: any = null;
+  private offerRetryInterval: any = null;
+  private offerRetryCount: number = 0;
   private isClosed: boolean = false;
   private isRestartingIce: boolean = false;
   private lastNetworkQuality: 'excellent' | 'good' | 'poor' = 'excellent';
   private processedSignalIds = new Set<string>();
   private pendingCandidates: RTCIceCandidateInit[] = [];
   private broadcastChannel: BroadcastChannel | null = null;
+  private supabaseChannel: any = null;
+  private supabaseChannelReady: boolean = false;
+  private pendingOutgoingSignals: SignalingPayload[] = [];
   private currentDeviceId?: string;
   private targetDeviceId?: string;
  
-  // Packet statistics tracking
   private prevPacketsLost: number = 0;
   private prevPacketsReceived: number = 0;
  
@@ -192,6 +174,36 @@ export class WebRTCP2PSession {
     this.callbacks = callbacks;
     this.currentDeviceId = currentDeviceId;
     this.targetDeviceId = targetDeviceId;
+ 
+    const supabase = getSupabase();
+    this.supabaseChannel = supabase.channel(`call_signals_${callId}`);
+ 
+    this.supabaseChannel.on('broadcast', { event: 'webrtc_signal' }, (payload: any) => {
+      if (payload && payload.payload) {
+        const sig = payload.payload as SignalingPayload;
+        if (sig.callId !== this.callId) return;
+        if (sig.senderDeviceId && this.currentDeviceId && sig.senderDeviceId === this.currentDeviceId) return;
+        const sigKey = `sb_${sig.type}_${JSON.stringify(sig.sdp || sig.candidate || {})}`;
+        if (!this.processedSignalIds.has(sigKey)) {
+          this.processedSignalIds.add(sigKey);
+          this.handleIncomingSignal(sig);
+        }
+      }
+    });
+ 
+    // IMPORTANT: Supabase realtime broadcast is fire-and-forget — a message sent
+    // before the OTHER side's channel has finished subscribing is lost forever
+    // (this was the root cause of "rings but never connects"). We track our own
+    // ready state here, and separately retry the initial offer below so the call
+    // still connects even if the peer subscribed a moment late.
+    this.supabaseChannel.subscribe((status: string) => {
+      if (status === 'SUBSCRIBED') {
+        this.supabaseChannelReady = true;
+        const queued = [...this.pendingOutgoingSignals];
+        this.pendingOutgoingSignals = [];
+        queued.forEach((sig) => this.dispatchSignal(sig));
+      }
+    });
   }
  
   public async start(localStream: MediaStream, isVideo: boolean): Promise<void> {
@@ -205,7 +217,37 @@ export class WebRTCP2PSession {
  
     if (this.isCaller) {
       await this.createAndSendOffer(false);
+      this.startOfferRetry();
     }
+  }
+ 
+  private startOfferRetry() {
+    if (this.offerRetryInterval) clearInterval(this.offerRetryInterval);
+    this.offerRetryCount = 0;
+    this.offerRetryInterval = setInterval(() => {
+      if (this.isClosed || !this.pc) {
+        clearInterval(this.offerRetryInterval);
+        return;
+      }
+      if (this.pc.signalingState !== 'have-local-offer' || this.pc.connectionState === 'connected') {
+        clearInterval(this.offerRetryInterval);
+        return;
+      }
+      this.offerRetryCount++;
+      if (this.offerRetryCount > 5) {
+        clearInterval(this.offerRetryInterval);
+        return;
+      }
+      if (this.pc.localDescription) {
+        this.sendSignal({
+          callId: this.callId,
+          senderId: this.currentUserId,
+          targetId: this.targetUserId,
+          type: 'offer',
+          sdp: this.pc.localDescription,
+        });
+      }
+    }, 2000);
   }
  
   private initPeerConnection() {
@@ -217,7 +259,6 @@ export class WebRTCP2PSession {
  
     this.pc = new RTCPeerConnection(cachedIceConfiguration);
  
-    // Add local tracks to peer connection and set high priority for audio
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => {
         if (this.pc && this.localStream) {
@@ -236,7 +277,6 @@ export class WebRTCP2PSession {
             try {
               const params = sender.getParameters();
               if (params && params.encodings && params.encodings.length > 0) {
-                // Allocate up to 3.5 Mbps for crystal-clear Full HD 1080p/720p 60fps video
                 params.encodings[0].maxBitrate = 3500000;
                 params.encodings[0].priority = 'medium';
                 params.encodings[0].networkPriority = 'medium';
@@ -250,9 +290,7 @@ export class WebRTCP2PSession {
       });
     }
  
-    // Handle incoming remote tracks
     this.pc.ontrack = (event) => {
-      // Ensure all tracks from incoming stream are registered
       if (event.streams && event.streams[0]) {
         event.streams[0].getTracks().forEach((t) => {
           if (!this.remoteStream.getTracks().some((existing) => existing.id === t.id)) {
@@ -260,7 +298,6 @@ export class WebRTCP2PSession {
           }
         });
       }
-      // Ensure the direct event track is also registered
       if (event.track) {
         if (!this.remoteStream.getTracks().some((existing) => existing.id === event.track.id)) {
           this.remoteStream.addTrack(event.track);
@@ -269,11 +306,14 @@ export class WebRTCP2PSession {
       }
     };
  
-    // Connection state changes
     this.pc.onconnectionstatechange = () => {
       if (!this.pc) return;
       const state = this.pc.connectionState;
       if (state === 'connected') {
+        if (this.offerRetryInterval) {
+          clearInterval(this.offerRetryInterval);
+          this.offerRetryInterval = null;
+        }
         this.callbacks.onConnected?.();
       } else if (state === 'disconnected' || state === 'failed') {
         this.handleNetworkDisconnection();
@@ -290,7 +330,6 @@ export class WebRTCP2PSession {
       }
     };
  
-    // Send local ICE candidates to peer
     this.pc.onicecandidate = (event) => {
       if (event.candidate) {
         this.sendSignal({
@@ -303,7 +342,6 @@ export class WebRTCP2PSession {
       }
     };
  
-    // Start network & audio quality adaptation loop
     this.startNetworkQualityMonitoring();
   }
  
@@ -336,10 +374,6 @@ export class WebRTCP2PSession {
     }
   }
  
-  /**
-   * Monitors packet loss, round-trip-time (RTT), and jitter in real-time.
-   * Dynamically adapts audio & video bitrates to ensure uninterrupted, clear voice.
-   */
   private startNetworkQualityMonitoring() {
     if (this.statsInterval) {
       clearInterval(this.statsInterval);
@@ -355,7 +389,6 @@ export class WebRTCP2PSession {
         let currentRtt = 0;
  
         stats.forEach((report) => {
-          // Check inbound audio stats for packet loss & jitter
           if (report.type === 'inbound-rtp' && report.kind === 'audio') {
             const packetsLost = report.packetsLost || 0;
             const packetsReceived = report.packetsReceived || 0;
@@ -370,18 +403,16 @@ export class WebRTCP2PSession {
  
             this.prevPacketsLost = packetsLost;
             this.prevPacketsReceived = packetsReceived;
-            currentJitter = (report.jitter || 0) * 1000; // ms
+            currentJitter = (report.jitter || 0) * 1000;
           }
  
-          // Check candidate-pair for real Round-Trip Time
           if (report.type === 'candidate-pair' && report.state === 'succeeded') {
             if (typeof report.currentRoundTripTime === 'number') {
-              currentRtt = report.currentRoundTripTime * 1000; // ms
+              currentRtt = report.currentRoundTripTime * 1000;
             }
           }
         });
  
-        // Determine network health
         let quality: 'excellent' | 'good' | 'poor' = 'excellent';
         if (currentPacketLossRate > 5 || currentRtt > 300 || currentJitter > 60) {
           quality = 'poor';
@@ -402,9 +433,6 @@ export class WebRTCP2PSession {
     }, 2000);
   }
  
-  /**
-   * Adapts media streams: Always prioritizes voice transmission over video when network is congested.
-   */
   private adaptMediaToNetwork(quality: 'excellent' | 'good' | 'poor') {
     if (!this.pc) return;
  
@@ -418,33 +446,28 @@ export class WebRTCP2PSession {
         }
  
         if (sender.track.kind === 'audio') {
-          // Audio sender gets maximum priority
           params.encodings[0].priority = 'high';
           params.encodings[0].networkPriority = 'high';
  
           if (quality === 'poor') {
-            // Adaptive audio: 48kbps with inband FEC to fit through narrow bandwidth
             params.encodings[0].maxBitrate = 48000;
           } else {
-            // Full 96kbps HD audio for crystal clear fidelity
             params.encodings[0].maxBitrate = 96000;
           }
           sender.setParameters(params).catch(() => {});
         } else if (sender.track.kind === 'video') {
-          // Video sender adapts resolution and bitrate dynamically
           if (quality === 'poor') {
-            params.encodings[0].maxBitrate = 400000; // 400 kbps fallback
+            params.encodings[0].maxBitrate = 400000;
             params.encodings[0].priority = 'low';
             params.encodings[0].networkPriority = 'low';
             params.encodings[0].scaleResolutionDownBy = 1.5;
           } else if (quality === 'good') {
-            params.encodings[0].maxBitrate = 1500000; // 1.5 Mbps for smooth 720p HD
+            params.encodings[0].maxBitrate = 1500000;
             params.encodings[0].priority = 'medium';
             params.encodings[0].networkPriority = 'medium';
             params.encodings[0].scaleResolutionDownBy = 1;
           } else {
-            // Excellent network: Full 3.5 Mbps 1080p/720p 60fps HD video
-            params.encodings[0].maxBitrate = 3500000; // 3.5 Mbps HD
+            params.encodings[0].maxBitrate = 3500000;
             params.encodings[0].priority = 'medium';
             params.encodings[0].networkPriority = 'medium';
             params.encodings[0].scaleResolutionDownBy = 1;
@@ -455,9 +478,6 @@ export class WebRTCP2PSession {
     });
   }
  
-  /**
-   * Handles Wi-Fi to Mobile data switching, brief disconnections & seamless ICE restarts.
-   */
   private handleNetworkDisconnection() {
     if (this.isClosed || this.isRestartingIce) return;
  
@@ -492,10 +512,8 @@ export class WebRTCP2PSession {
  
       window.addEventListener('online', handleOnline);
  
-      // Handle earphone/headset plug/unplug events
       if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
         navigator.mediaDevices.addEventListener('devicechange', () => {
-          // Maintain audio tracks without breaking active session
           if (this.localStream) {
             const audioTrack = this.localStream.getAudioTracks()[0];
             if (audioTrack && audioTrack.readyState === 'ended') {
@@ -518,6 +536,18 @@ export class WebRTCP2PSession {
     }
   }
  
+  private dispatchSignal(payload: SignalingPayload) {
+    if (this.supabaseChannel) {
+      this.supabaseChannel
+        .send({
+          type: 'broadcast',
+          event: 'webrtc_signal',
+          payload: payload,
+        })
+        .catch(() => {});
+    }
+  }
+ 
   private async sendSignal(signal: SignalingPayload) {
     try {
       const payload: SignalingPayload = {
@@ -526,7 +556,6 @@ export class WebRTCP2PSession {
         targetDeviceId: this.targetDeviceId,
       };
  
-      // 1. Cross-tab local broadcast
       if (typeof window !== 'undefined' && (window as any).BroadcastChannel) {
         try {
           const bc = new BroadcastChannel(`liveconnect_p2p_signals_${this.callId}`);
@@ -535,23 +564,26 @@ export class WebRTCP2PSession {
         } catch {}
       }
  
-      // 2. Server signaling relay
-      await fetch('/api/calls/signal', {
+      fetch('/api/calls/signal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      });
+      }).catch(() => {});
+ 
+      if (this.supabaseChannelReady) {
+        this.dispatchSignal(payload);
+      } else {
+        this.pendingOutgoingSignals.push(payload);
+      }
     } catch {}
   }
  
   public async handleIncomingSignal(signal: SignalingPayload) {
     if (signal.callId !== this.callId) return;
  
-    // Don't process signals sent by our own device
     if (signal.senderDeviceId && this.currentDeviceId && signal.senderDeviceId === this.currentDeviceId) {
       return;
     }
-    // If no deviceId specified, ignore if sent by ourselves
     if (!signal.senderDeviceId && signal.senderId === this.currentUserId && !this.targetDeviceId) {
       return;
     }
@@ -598,7 +630,6 @@ export class WebRTCP2PSession {
           try {
             await this.pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
           } catch {
-            // ignore transient ICE race conditions
           }
         }
       }
@@ -615,13 +646,11 @@ export class WebRTCP2PSession {
       try {
         await this.pc.addIceCandidate(new RTCIceCandidate(cand));
       } catch (e) {
-        // ignore
       }
     }
   }
  
   private startSignalingPolling() {
-    // Listen to cross-tab BroadcastChannel with deduplication
     if (typeof window !== 'undefined' && (window as any).BroadcastChannel) {
       try {
         if (!this.broadcastChannel) {
@@ -643,7 +672,6 @@ export class WebRTCP2PSession {
       } catch {}
     }
  
-    // Poll server signaling endpoint (rapid 350ms interval for near-instant cross-device connection)
     this.pollInterval = setInterval(async () => {
       if (this.isClosed || !this.pc) return;
       try {
@@ -740,11 +768,21 @@ export class WebRTCP2PSession {
       clearInterval(this.statsInterval);
       this.statsInterval = null;
     }
+    if (this.offerRetryInterval) {
+      clearInterval(this.offerRetryInterval);
+      this.offerRetryInterval = null;
+    }
     if (this.broadcastChannel) {
       try {
         this.broadcastChannel.close();
       } catch {}
       this.broadcastChannel = null;
+    }
+    if (this.supabaseChannel) {
+      try {
+        this.supabaseChannel.unsubscribe();
+      } catch {}
+      this.supabaseChannel = null;
     }
     if (this.pc) {
       this.pc.ontrack = null;
