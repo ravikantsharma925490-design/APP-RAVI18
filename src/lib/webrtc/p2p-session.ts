@@ -47,7 +47,7 @@ const GLOBAL_DEFAULT_ICE_SERVERS: RTCConfiguration = {
 let cachedIceConfiguration: RTCConfiguration = GLOBAL_DEFAULT_ICE_SERVERS;
  
 const METERED_APP_NAME: string = 'liveconnect-app';
-const METERED_API_KEY: string = 'i6SjcYScpk8dKlaoiVBeXqo9k2rbe6lNnGo2wo7Spp5_yvoU';
+const METERED_API_KEY: string = 'e29aebb8d8aa7fa8681c6ef7be622e9f9c6d';
  
 if (typeof window !== 'undefined' && METERED_API_KEY !== 'YOUR_API_KEY') {
   fetch(`https://${METERED_APP_NAME}.metered.live/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`)
