@@ -348,11 +348,14 @@ export function useCall(
         const currentActive = activeCallStateRef.current;
         if (currentActive && currentActive.call.id === data.callId) {
           audioTones.stop();
+          audioTones.playConnectedSound();
           if (callTimeoutRef.current) {
             clearTimeout(callTimeoutRef.current);
             callTimeoutRef.current = null;
           }
-          setActiveCallState((prev) => (prev ? { ...prev, status: 'connected' } : null));
+          const nextActive = { ...currentActive, status: 'connected' as const };
+          activeCallStateRef.current = nextActive;
+          setActiveCallState(nextActive);
           updateCallInHistory(currentUser.id, data.callId, {
             status: 'accepted',
             answered_at: new Date().toISOString(),
@@ -499,8 +502,9 @@ export function useCall(
 
       // If active call status changed
       if (currentActive && currentActive.call.id === updatedCall.id) {
-        if (updatedCall.status === 'accepted' && currentActive.status !== 'connected') {
+        if ((updatedCall.status === 'accepted' || updatedCall.status === 'connected') && currentActive.status !== 'connected') {
           audioTones.stop();
+          audioTones.playConnectedSound();
           // Clear auto-cancel timeout since call was accepted
           if (callTimeoutRef.current) {
             clearTimeout(callTimeoutRef.current);
@@ -511,7 +515,9 @@ export function useCall(
             currentActive.call.calleeDeviceId = updatedCall.calleeDeviceId;
           }
 
-          setActiveCallState((prev) => (prev ? { ...prev, status: 'connected' } : null));
+          const nextActive = { ...currentActive, status: 'connected' as const };
+          activeCallStateRef.current = nextActive;
+          setActiveCallState(nextActive);
           updateCallInHistory(currentUser.id, updatedCall.id, {
             status: 'accepted',
             answered_at: new Date().toISOString(),
@@ -683,35 +689,34 @@ export function useCall(
           }
 
           // Check if existing incoming call was cancelled / ended by caller
-          if (Date.now() - incomingCallReceivedAtRef.current > 3000) {
-            const statusRes = await fetch('/api/calls/status', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ callId: incomingCallRef.current.id }),
-            });
-            if (statusRes.ok) {
-              const statusData = await statusRes.json();
-              if (
-                statusData &&
-                statusData.status &&
-                ['cancelled', 'ended', 'rejected', 'missed'].includes(statusData.status)
-              ) {
-                audioTones.stop();
-                setIncomingCall(null);
-                updateCallInHistory(currentUser.id, incomingCallRef.current.id, {
-                  status: statusData.status,
-                  isMissed: statusData.status !== 'ended',
-                  ended_at: new Date().toISOString(),
-                  durationFormatted: statusData.status === 'rejected' ? 'Declined' : 'Missed',
-                });
-              }
+          const statusRes = await fetch('/api/calls/status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ callId: incomingCallRef.current.id }),
+          });
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            if (
+              statusData &&
+              statusData.status &&
+              ['cancelled', 'ended', 'rejected', 'missed'].includes(statusData.status)
+            ) {
+              audioTones.stop();
+              audioTones.playCallEndedSound();
+              setIncomingCall(null);
+              updateCallInHistory(currentUser.id, incomingCallRef.current.id, {
+                status: statusData.status,
+                isMissed: statusData.status !== 'ended',
+                ended_at: new Date().toISOString(),
+                durationFormatted: statusData.status === 'rejected' ? 'Declined' : 'Missed',
+              });
             }
           }
         }
       } catch (e) {
         // network polling fallback
       }
-    }, 600);
+    }, 200);
 
     return () => {
       clearInterval(incomingPollInterval);
@@ -744,8 +749,9 @@ export function useCall(
           const data = await res.json();
           const currentActive = activeCallStateRef.current;
           if (currentActive && currentActive.call.id === callId) {
-            if (data.status === 'accepted' && currentActive.status !== 'connected') {
+            if ((data.status === 'accepted' || data.status === 'connected') && currentActive.status !== 'connected') {
               audioTones.stop();
+              audioTones.playConnectedSound();
               if (callTimeoutRef.current) {
                 clearTimeout(callTimeoutRef.current);
                 callTimeoutRef.current = null;
@@ -753,7 +759,9 @@ export function useCall(
               if (data.call?.calleeDeviceId) {
                 currentActive.call.calleeDeviceId = data.call.calleeDeviceId;
               }
-              setActiveCallState((prev) => (prev ? { ...prev, status: 'connected' } : null));
+              const nextActive = { ...currentActive, status: 'connected' as const };
+              activeCallStateRef.current = nextActive;
+              setActiveCallState(nextActive);
               if (currentUser?.id) {
                 updateCallInHistory(currentUser.id, callId, {
                   status: 'accepted',
@@ -806,7 +814,7 @@ export function useCall(
       } catch (e) {
         // ignore
       }
-    }, 350);
+    }, 200);
 
     return () => {
       clearInterval(statusInterval);

@@ -3,37 +3,46 @@
 
 class AudioToneService {
   private ctx: AudioContext | null = null;
+  private masterGain: GainNode | null = null;
   private currentInterval: any = null;
   private activeOscillators: OscillatorNode[] = [];
+  private isRinging: boolean = false;
 
-  private getContext(): AudioContext {
+  private getContext(): { ctx: AudioContext; masterGain: GainNode } {
     if (!this.ctx || this.ctx.state === 'closed') {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       this.ctx = new AudioCtx();
+      this.masterGain = null;
     }
     if (this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
-    return this.ctx;
+    if (!this.masterGain) {
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.connect(this.ctx.destination);
+    }
+    return { ctx: this.ctx, masterGain: this.masterGain };
   }
 
   // Play outgoing ringback tone (standard 440Hz + 480Hz dual tone cadence)
   startRingbackTone() {
     this.stop();
+    this.isRinging = true;
     try {
-      const ctx = this.getContext();
-      
+      const { ctx, masterGain } = this.getContext();
+      masterGain.gain.setValueAtTime(1, ctx.currentTime);
+
       const playBurst = () => {
-        if (!this.ctx || this.ctx.state === 'closed') return;
+        if (!this.isRinging || !this.ctx || this.ctx.state === 'closed') return;
         const now = ctx.currentTime;
-        
+
         const osc1 = ctx.createOscillator();
         const osc2 = ctx.createOscillator();
         const gainNode = ctx.createGain();
 
         osc1.type = 'sine';
         osc1.frequency.setValueAtTime(440, now);
-        
+
         osc2.type = 'sine';
         osc2.frequency.setValueAtTime(480, now);
 
@@ -44,7 +53,7 @@ class AudioToneService {
 
         osc1.connect(gainNode);
         osc2.connect(gainNode);
-        gainNode.connect(ctx.destination);
+        gainNode.connect(masterGain);
 
         osc1.start(now);
         osc2.start(now);
@@ -64,11 +73,13 @@ class AudioToneService {
   // Play incoming ringtone (pleasant ascending melodic chime sequence)
   startIncomingRingtone() {
     this.stop();
+    this.isRinging = true;
     try {
-      const ctx = this.getContext();
+      const { ctx, masterGain } = this.getContext();
+      masterGain.gain.setValueAtTime(1, ctx.currentTime);
 
       const playMelody = () => {
-        if (!this.ctx || this.ctx.state === 'closed') return;
+        if (!this.isRinging || !this.ctx || this.ctx.state === 'closed') return;
         const notes = [
           { f: 523.25, d: 0.18 }, // C5
           { f: 659.25, d: 0.18 }, // E5
@@ -81,6 +92,7 @@ class AudioToneService {
         let timeOffset = ctx.currentTime;
 
         notes.forEach((note) => {
+          if (!this.isRinging) return;
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
 
@@ -92,7 +104,7 @@ class AudioToneService {
           gain.gain.exponentialRampToValueAtTime(0.001, timeOffset + note.d);
 
           osc.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(masterGain);
 
           osc.start(timeOffset);
           osc.stop(timeOffset + note.d);
@@ -113,7 +125,8 @@ class AudioToneService {
   playConnectedSound() {
     this.stop();
     try {
-      const ctx = this.getContext();
+      const { ctx, masterGain } = this.getContext();
+      masterGain.gain.setValueAtTime(1, ctx.currentTime);
       const now = ctx.currentTime;
 
       [
@@ -127,7 +140,7 @@ class AudioToneService {
         gain.gain.setValueAtTime(0.15, now + n.t);
         gain.gain.exponentialRampToValueAtTime(0.001, now + n.t + 0.2);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(masterGain);
         osc.start(now + n.t);
         osc.stop(now + n.t + 0.2);
       });
@@ -142,7 +155,8 @@ class AudioToneService {
       const isEnabled = localStorage.getItem('liveconnect_perm_msg_sound') !== 'false';
       if (!isEnabled) return;
 
-      const ctx = this.getContext();
+      const { ctx, masterGain } = this.getContext();
+      masterGain.gain.setValueAtTime(1, ctx.currentTime);
       const now = ctx.currentTime;
 
       [
@@ -156,7 +170,7 @@ class AudioToneService {
         gain.gain.setValueAtTime(0.08, now + n.t);
         gain.gain.exponentialRampToValueAtTime(0.001, now + n.t + 0.22);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(masterGain);
         osc.start(now + n.t);
         osc.stop(now + n.t + 0.22);
       });
@@ -169,7 +183,8 @@ class AudioToneService {
   playCallEndedSound() {
     this.stop();
     try {
-      const ctx = this.getContext();
+      const { ctx, masterGain } = this.getContext();
+      masterGain.gain.setValueAtTime(1, ctx.currentTime);
       const now = ctx.currentTime;
 
       [
@@ -184,7 +199,7 @@ class AudioToneService {
         gain.gain.setValueAtTime(0.12, now + n.t);
         gain.gain.exponentialRampToValueAtTime(0.001, now + n.t + 0.15);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(masterGain);
         osc.start(now + n.t);
         osc.stop(now + n.t + 0.15);
       });
@@ -194,19 +209,24 @@ class AudioToneService {
   }
 
   stop() {
+    this.isRinging = false;
     if (this.currentInterval) {
       clearInterval(this.currentInterval);
       this.currentInterval = null;
+    }
+    if (this.masterGain && this.ctx && this.ctx.state !== 'closed') {
+      try {
+        this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
+      } catch (e) {}
     }
     this.activeOscillators.forEach((osc) => {
       try {
         osc.stop();
         osc.disconnect();
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) {}
     });
     this.activeOscillators = [];
+    this.masterGain = null;
   }
 }
 

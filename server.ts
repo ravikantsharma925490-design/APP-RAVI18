@@ -1428,6 +1428,19 @@ app.post('/api/calls/action', (req, res) => {
       call.updated_at = nowIso;
     }
 
+    // Store instant call action signal for fast polling/signal lookup
+    const actionSignal = {
+      type: action === 'reject' ? 'CALL_REJECTED' : action === 'cancel' ? 'CALL_CANCELLED' : action === 'end' ? 'CALL_ENDED' : 'CALL_ACTION',
+      callId,
+      action,
+      status: call.status,
+      senderId: userId,
+      _t: Date.now(),
+    };
+    const globalKey = `call_${callId}`;
+    const globalExisting = serverSignalsStore.get(globalKey) || [];
+    serverSignalsStore.set(globalKey, [...globalExisting.slice(-40), actionSignal]);
+
     // Sync to Supabase in background
     if (serverSupabase) {
       serverSupabase
