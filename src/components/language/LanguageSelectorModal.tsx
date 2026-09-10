@@ -90,7 +90,7 @@ export const LanguageSelectorModal: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by language, country, or native script (e.g. Hindi, हिन्दी, Español, العربية)..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm placeholder-neutral-400 outline-none focus:ring-2 focus:ring-blue-500 border border-transparent dark:border-neutral-700 transition-all"
+              className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-base placeholder-neutral-400 outline-none focus:ring-2 focus:ring-blue-500 border border-transparent dark:border-neutral-700 transition-all"
             />
             {searchQuery && (
               <button

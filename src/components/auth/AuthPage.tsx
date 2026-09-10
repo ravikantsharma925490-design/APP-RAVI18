@@ -250,7 +250,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-neutral-950 text-white relative overflow-hidden">
+    <div className="min-h-screen-safe w-full flex items-center justify-center p-4 bg-neutral-950 text-white relative overflow-hidden">
       {/* Subtle Background Glow */}
       <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />
@@ -361,7 +361,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     placeholder="Enter your full name"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white placeholder-neutral-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white placeholder-neutral-500 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
               </div>
@@ -390,7 +390,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                         e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')
                       )
                     }
-                    className={`w-full pl-10 pr-10 py-2.5 rounded-xl bg-neutral-800/80 border text-white placeholder-neutral-500 text-sm focus:outline-none focus:ring-2 font-mono transition-all ${
+                    className={`w-full pl-10 pr-10 py-2.5 rounded-xl bg-neutral-800/80 border text-white placeholder-neutral-500 text-base focus:outline-none focus:ring-2 font-mono transition-all ${
                       usernameStatus === 'available'
                         ? 'border-emerald-500/60 focus:ring-emerald-500'
                         : usernameStatus === 'taken'
@@ -474,7 +474,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                           placeholder="Search country or dial code..."
                           value={countrySearch}
                           onChange={(e) => setCountrySearch(e.target.value)}
-                          className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-xs text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-base text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                       </div>
                     </div>
@@ -540,7 +540,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 placeholder="you@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white placeholder-neutral-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white placeholder-neutral-500 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               />
             </div>
           </div>
@@ -573,7 +573,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white placeholder-neutral-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white placeholder-neutral-500 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 />
               </div>
             </div>

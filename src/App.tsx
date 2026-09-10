@@ -9,6 +9,7 @@ import { useNotifications } from '@/src/hooks/useNotifications';
 import { AuthPage } from '@/src/components/auth/AuthPage';
 import { BottomNav, TabType } from '@/src/components/navigation/BottomNav';
 import { SidebarNav } from '@/src/components/navigation/SidebarNav';
+import { MobileHeader } from '@/src/components/navigation/MobileHeader';
 import { MessagesTab } from '@/src/components/tabs/MessagesTab';
 import { SearchTab } from '@/src/components/tabs/SearchTab';
 import { CallsTab } from '@/src/components/tabs/CallsTab';
@@ -26,10 +27,6 @@ import { Toast } from '@/src/components/ui/Toast';
 import { PushBanner } from '@/src/components/ui/PushBanner';
 import { TermsConditions } from '@/src/components/legal/TermsConditions';
 import { PrivacyPolicy } from '@/src/components/legal/PrivacyPolicy';
-import { LiveTab } from '@/src/components/live/LiveTab';
-import { LiveRoomScreen } from '@/src/components/live/LiveRoomScreen';
-import { LiveMiniRoom } from '@/src/components/live/LiveMiniRoom';
-import { LiveRoom } from '@/src/types/live';
 import { Profile } from '@/src/types';
 
 export default function App() {
@@ -134,10 +131,6 @@ export default function App() {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [viewingProfile, setViewingProfile] = useState<Profile | null>(null);
 
-  // Live Voice Rooms State
-  const [activeLiveRoom, setActiveLiveRoom] = useState<LiveRoom | null>(null);
-  const [isLiveRoomMinimized, setIsLiveRoomMinimized] = useState(false);
-
   // Calculate total unread messages count (active open chat messages are only excluded if currently viewing messages tab)
   const totalUnreadCount = useMemo(() => {
     return conversations.reduce((acc, c) => {
@@ -156,27 +149,11 @@ export default function App() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname;
-      const urlParams = new URLSearchParams(window.location.search);
-      const queryRoomId = urlParams.get('room');
 
-      if (queryRoomId) {
-        setActiveTab('live');
-        // Fetch and auto-join room if roomId provided in URL
-        fetch(`/api/live/rooms/detail?roomId=${queryRoomId}`)
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.room) {
-              setActiveLiveRoom(data.room);
-              setIsLiveRoomMinimized(false);
-            }
-          })
-          .catch(() => {});
-      } else if (path === '/app/messages' || path === '/app' || path === '/' || path === '') {
+      if (path === '/app/messages' || path === '/app' || path === '/' || path === '') {
         setActiveTab('messages');
       } else if (path === '/app/search') {
         setActiveTab('search');
-      } else if (path === '/app/live') {
-        setActiveTab('live');
       } else if (path === '/app/calls' || path === '/app/call-history') {
         setActiveTab('calls');
         markHistoryAsViewed();
@@ -201,7 +178,7 @@ export default function App() {
   // Loading initial auth
   if (authLoading) {
     return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-neutral-950 text-white">
+      <div className="min-h-screen-safe w-full flex flex-col items-center justify-center bg-neutral-950 text-white">
         <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
         <p className="text-sm font-semibold text-neutral-400">Loading LiveConnect...</p>
       </div>
@@ -214,7 +191,7 @@ export default function App() {
       const pathname = window.location.pathname;
       if (pathname === '/app/help/terms' || pathname === '/terms') {
         return (
-          <div className="h-screen w-screen bg-neutral-950 text-white overflow-hidden">
+          <div className="h-screen-safe w-screen bg-neutral-950 text-white overflow-hidden">
             <TermsConditions
               onBack={() => {
                 window.history.pushState({}, '', '/app');
@@ -226,7 +203,7 @@ export default function App() {
       }
       if (pathname === '/app/help/privacy' || pathname === '/privacy') {
         return (
-          <div className="h-screen w-screen bg-neutral-950 text-white overflow-hidden">
+          <div className="h-screen-safe w-screen bg-neutral-950 text-white overflow-hidden">
             <PrivacyPolicy
               onBack={() => {
                 window.history.pushState({}, '', '/app');
@@ -264,7 +241,7 @@ export default function App() {
   const isCallActive = Boolean(activeCallState || incomingCall);
 
   return (
-    <div className="h-screen w-screen flex flex-col md:flex-row bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 overflow-hidden font-sans">
+    <div className="h-screen-safe w-screen flex flex-col md:flex-row bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 overflow-hidden font-sans">
       {/* 1. Desktop Left Navigation Rail (Shows exact 6 tabs in order) */}
       <SidebarNav
         activeTab={activeTab}
@@ -279,6 +256,15 @@ export default function App() {
 
       {/* 2. Main Tab View Area */}
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+        <MobileHeader
+          unreadNotificationsCount={unreadNotificationsCount}
+          onOpenNotifications={() => setIsNotificationOpen(true)}
+          hide={
+            isCallActive ||
+            (activeTab === 'messages' && Boolean(activeConversationId))
+          }
+        />
+
         {/* Tab 1: Messages (💬) */}
         {activeTab === 'messages' && (
           <MessagesTab
@@ -357,17 +343,6 @@ export default function App() {
           />
         )}
 
-        {/* Tab 4: Live Voice Discovery (🎙️) */}
-        {activeTab === 'live' && (
-          <LiveTab
-            currentUser={activeUserProfile || profile!}
-            onJoinRoom={(room) => {
-              setActiveLiveRoom(room);
-              setIsLiveRoomMinimized(false);
-            }}
-          />
-        )}
-
         {/* Tab 5: Profile (👤) */}
         {activeTab === 'profile' && (
           <ProfileTab
@@ -406,8 +381,7 @@ export default function App() {
         missedCallsCount={missedCallsCount}
         hide={
           isCallActive ||
-          (activeTab === 'messages' && Boolean(activeConversationId)) ||
-          (Boolean(activeLiveRoom) && !isLiveRoomMinimized)
+          (activeTab === 'messages' && Boolean(activeConversationId))
         }
       />
 
@@ -448,34 +422,6 @@ export default function App() {
           onToggleCamera={toggleCamera}
           onSwitchCamera={switchCamera}
           onEndCall={endCall}
-        />
-      )}
-
-      {/* 6. Live Voice Room Full-Screen & Minimized Container */}
-      {activeLiveRoom && !isLiveRoomMinimized && (
-        <LiveRoomScreen
-          room={activeLiveRoom}
-          currentUser={activeUserProfile || profile!}
-          onMinimize={() => setIsLiveRoomMinimized(true)}
-          onLeaveRoom={() => {
-            setActiveLiveRoom(null);
-            setIsLiveRoomMinimized(false);
-          }}
-        />
-      )}
-
-      {activeLiveRoom && isLiveRoomMinimized && (
-        <LiveMiniRoom
-          room={activeLiveRoom}
-          isSeated={activeLiveRoom.seats.some((s) => s.user?.id === (activeUserProfile?.id || profile?.id))}
-          isMuted={false}
-          isSpeaking={false}
-          onMaximize={() => setIsLiveRoomMinimized(false)}
-          onLeave={() => {
-            setActiveLiveRoom(null);
-            setIsLiveRoomMinimized(false);
-          }}
-          onToggleMic={() => {}}
         />
       )}
 

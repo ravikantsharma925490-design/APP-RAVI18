@@ -131,7 +131,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
               }
             }}
             placeholder="Type User ID or @username..."
-            className="w-full pl-12 pr-16 py-3.5 rounded-2xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white placeholder-neutral-400 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+            className="w-full pl-12 pr-16 py-3.5 rounded-2xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white placeholder-neutral-400 text-base md:text-base focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
           />
           <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
             {loading && (

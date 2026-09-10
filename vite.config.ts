@@ -6,7 +6,6 @@ import { spawn } from 'child_process';
 import { defineConfig, Plugin } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { handleLiveApiRequest } from './src/lib/live/live-api-router';
 
 dotenv.config();
 
@@ -244,18 +243,6 @@ function devApiPlugin(): Plugin {
             })
           );
           return;
-        }
-
-        // Live Voice Room endpoints
-        if (url?.startsWith('/api/live/')) {
-          const body = await parseJsonBody(req);
-          const result = await handleLiveApiRequest(url, req.method || 'POST', body);
-          if (result) {
-            res.statusCode = result.status;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(result.data));
-            return;
-          }
         }
 
         // ----------------------------------------------------

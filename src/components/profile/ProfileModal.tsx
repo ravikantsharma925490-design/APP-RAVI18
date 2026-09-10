@@ -416,7 +416,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Enter your full name or nickname"
-                    className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-2xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-3.5 py-2.5 text-base rounded-2xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -543,7 +543,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
                     placeholder="Tell others about yourself..."
-                    className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-2xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="w-full pl-10 pr-3.5 py-2.5 text-base rounded-2xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   />
                 </div>
               </div>

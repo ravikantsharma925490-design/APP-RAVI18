@@ -21,6 +21,17 @@ import App from './App.tsx';
 import { LanguageProvider } from './lib/LanguageContext.tsx';
 import './index.css';
 
+// Fix mobile viewport height
+function setAppVh() {
+  document.documentElement.style.setProperty('--app-vh', `${window.innerHeight}px`);
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', setAppVh);
+  window.addEventListener('orientationchange', setAppVh);
+  setAppVh();
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <LanguageProvider>

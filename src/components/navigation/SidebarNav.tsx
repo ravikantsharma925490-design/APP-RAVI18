@@ -48,12 +48,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       icon: Search,
     },
     {
-      id: 'live',
-      label: t('nav.live', 'Live Voice'),
-      icon: Radio,
-      isLive: true,
-    },
-    {
       id: 'calls',
       label: t('nav.calls', 'Calls'),
       icon: Phone,

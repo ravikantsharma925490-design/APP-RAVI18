@@ -3,7 +3,7 @@ import { MessageSquare, Search, Phone, User, Radio } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { useLanguage } from '@/src/lib/LanguageContext';
 
-export type TabType = 'messages' | 'search' | 'live' | 'calls' | 'call-history' | 'profile';
+export type TabType = 'messages' | 'search' | 'calls' | 'call-history' | 'profile';
 
 interface BottomNavProps {
   activeTab: TabType;
@@ -42,12 +42,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       id: 'search',
       label: t('nav.search', 'Search ID'),
       icon: Search,
-    },
-    {
-      id: 'live',
-      label: t('nav.live', 'Live Voice'),
-      icon: Radio,
-      isLive: true,
     },
     {
       id: 'calls',

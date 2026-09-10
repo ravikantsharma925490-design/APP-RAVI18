@@ -20,3 +20,19 @@
   padding-top: env(safe-area-inset-top, 0px);
 }
 
+:root {
+  --app-vh: 100vh;
+}
+
+.h-screen-safe {
+  height: 100vh;
+  height: var(--app-vh);
+  height: 100dvh;
+}
+
+.min-h-screen-safe {
+  min-height: 100vh;
+  min-height: var(--app-vh);
+  min-height: 100dvh;
+}
+

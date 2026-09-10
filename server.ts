@@ -6,32 +6,14 @@ import { createClient } from '@supabase/supabase-js';
 import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
 import { spawn } from 'child_process';
-import { handleLiveApiRequest } from './src/lib/live/live-api-router';
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Live Voice Room API Dispatcher
-app.all('/api/live/*', async (req, res) => {
-  try {
-    const url = req.path;
-    const method = req.method;
-    const body = req.body;
-    const result = await handleLiveApiRequest(url, method, body, serverSupabase);
-    if (result) {
-      return res.status(result.status).json(result.data);
-    }
-    return res.status(404).json({ error: 'Live endpoint not found' });
-  } catch (err: any) {
-    console.error('Error in /api/live handler:', err);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // In-memory media store for images, voice notes, and attachments
 interface MediaFileRecord {

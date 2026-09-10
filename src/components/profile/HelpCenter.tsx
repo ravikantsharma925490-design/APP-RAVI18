@@ -346,7 +346,7 @@ export const HelpCenter: React.FC<HelpCenterProps> = ({
             placeholder="Search help topics, FAQs, or troubleshooting..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 text-sm rounded-2xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-xs"
+            className="w-full pl-10 pr-4 py-2.5 text-base rounded-2xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-xs"
           />
         </div>
       </div>
@@ -716,7 +716,7 @@ export const HelpCenter: React.FC<HelpCenterProps> = ({
                         placeholder="Please describe what happened, steps to reproduce, or any error messages..."
                         value={reportDetails}
                         onChange={(e) => setReportDetails(e.target.value)}
-                        className="w-full px-3.5 py-2 text-xs rounded-xl bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                        className="w-full px-3.5 py-2 text-base rounded-xl bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
                       />
                     </div>
 
@@ -842,7 +842,7 @@ export const HelpCenter: React.FC<HelpCenterProps> = ({
                         placeholder="e.g. Question about 1-to-1 WebRTC calling or account"
                         value={supportSubject}
                         onChange={(e) => setSupportSubject(e.target.value)}
-                        className="w-full px-3.5 py-2 text-xs rounded-xl bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3.5 py-2 text-base rounded-xl bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
 
@@ -856,7 +856,7 @@ export const HelpCenter: React.FC<HelpCenterProps> = ({
                         placeholder="How can our support team help you today?"
                         value={supportMessage}
                         onChange={(e) => setSupportMessage(e.target.value)}
-                        className="w-full px-3.5 py-2 text-xs rounded-xl bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3.5 py-2 text-base rounded-xl bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
 

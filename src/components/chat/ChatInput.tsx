@@ -792,7 +792,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             disabled={disabled}
-            className="flex-1 min-w-0 bg-transparent text-sm text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none px-2 py-1.5"
+            className="flex-1 min-w-0 bg-transparent text-base text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none px-2 py-1.5"
           />
 
           {/* Right Section: Action Icons */}

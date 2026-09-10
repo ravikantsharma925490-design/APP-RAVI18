@@ -108,7 +108,7 @@ export const UserSearchModal: React.FC<UserSearchModalProps> = ({
                   executeSearch(query);
                 }
               }}
-              className="w-full pl-10 pr-10 py-2.5 rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-inner"
+              className="w-full pl-10 pr-10 py-2.5 rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-inner"
             />
             {loading && (
               <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
