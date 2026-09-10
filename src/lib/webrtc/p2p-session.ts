@@ -526,13 +526,19 @@ export class WebRTCP2PSession {
  
   private dispatchSignal(payload: SignalingPayload) {
     if (this.supabaseChannel) {
-      this.supabaseChannel
-        .send({
-          type: 'broadcast',
-          event: 'webrtc_signal',
-          payload: payload,
-        })
-        .catch(() => {});
+      if ((this.supabaseChannel as any).state === 'joined') {
+        this.supabaseChannel
+          .send({
+            type: 'broadcast',
+            event: 'webrtc_signal',
+            payload: payload,
+          })
+          .catch(() => {});
+      } else if (typeof (this.supabaseChannel as any).httpSend === 'function') {
+        (this.supabaseChannel as any)
+          .httpSend('webrtc_signal', payload)
+          .catch(() => {});
+      }
     }
   }
  

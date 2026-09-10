@@ -478,13 +478,19 @@ export function useMessages(
 
       // 5. Broadcast to realtime channel so sender gets instant double blue check!
       if (channelRef.current) {
-        channelRef.current
-          .send({
-            type: 'broadcast',
-            event: 'messages_read',
-            payload: { conversationId, readerId: currentUserId },
-          })
-          .catch(() => {});
+        if ((channelRef.current as any).state === 'joined') {
+          channelRef.current
+            .send({
+              type: 'broadcast',
+              event: 'messages_read',
+              payload: { conversationId, readerId: currentUserId }
+            })
+            .catch(() => {});
+        } else if (typeof (channelRef.current as any).httpSend === 'function') {
+          (channelRef.current as any)
+            .httpSend('messages_read', { conversationId, readerId: currentUserId })
+            .catch(() => {});
+        }
       }
     } catch (err) {
       console.warn('Silent notice on markMessagesAsRead:', err);
@@ -934,13 +940,19 @@ export function useMessages(
 
       // 3. Broadcast to the other user via Realtime channel
       if (channelRef.current) {
-        channelRef.current
-          .send({
-            type: 'broadcast',
-            event: 'message_deleted',
-            payload: { conversationId, messageId },
-          })
-          .catch(() => {});
+        if ((channelRef.current as any).state === 'joined') {
+          channelRef.current
+            .send({
+              type: 'broadcast',
+              event: 'message_deleted',
+              payload: { conversationId, messageId }
+            })
+            .catch(() => {});
+        } else if (typeof (channelRef.current as any).httpSend === 'function') {
+          (channelRef.current as any)
+            .httpSend('message_deleted', { conversationId, messageId })
+            .catch(() => {});
+        }
       }
 
       // 4. Sync deletion with backend relay
@@ -985,13 +997,19 @@ export function useMessages(
 
       // 3. Broadcast clear to the other user via Realtime channel
       if (channelRef.current) {
-        channelRef.current
-          .send({
-            type: 'broadcast',
-            event: 'messages_cleared',
-            payload: { conversationId },
-          })
-          .catch(() => {});
+        if ((channelRef.current as any).state === 'joined') {
+          channelRef.current
+            .send({
+              type: 'broadcast',
+              event: 'messages_cleared',
+              payload: { conversationId }
+            })
+            .catch(() => {});
+        } else if (typeof (channelRef.current as any).httpSend === 'function') {
+          (channelRef.current as any)
+            .httpSend('messages_cleared', { conversationId })
+            .catch(() => {});
+        }
       }
 
       // 4. Call backend clear endpoint
