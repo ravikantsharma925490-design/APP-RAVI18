@@ -290,14 +290,14 @@ export const CallsTab: React.FC<CallsTabProps> = ({
                   <div
                     key={call.id}
                     className={cn(
-                      'p-3.5 sm:p-4 rounded-3xl bg-white dark:bg-neutral-900 border transition-all shadow-xs hover:shadow-md flex items-center justify-between gap-3 group',
+                      'p-3.5 sm:p-4 rounded-3xl bg-white dark:bg-neutral-900 border transition-all shadow-xs hover:shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 group',
                       call.isMissed
                         ? 'border-red-200/70 dark:border-red-950/60 bg-red-50/10 dark:bg-red-950/10'
                         : 'border-neutral-200/80 dark:border-neutral-800/80 hover:border-blue-500/40'
                     )}
                   >
                     {/* Left: Avatar & Info */}
-                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-3.5 min-w-0 w-full sm:flex-1">
                       <button
                         onClick={() => onOpenProfileView(peer)}
                         className="relative shrink-0 text-left cursor-pointer"
@@ -375,40 +375,40 @@ export const CallsTab: React.FC<CallsTabProps> = ({
                     </div>
 
                     {/* Right: Direct 1-Click Action Buttons */}
-                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    <div className="flex items-center gap-1 sm:gap-2 shrink-0 flex-wrap justify-end w-full sm:w-auto mt-2 sm:mt-0">
                       {onStartChat && (
                         <button
                           onClick={() => onStartChat(peer.id, peer)}
                           title={`Chat with ${peerName}`}
-                          className="p-2.5 sm:p-3 rounded-2xl bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 transition-all hover:scale-105 active:scale-95 shadow-xs cursor-pointer"
+                          className="p-2 sm:p-3 rounded-2xl bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 transition-all hover:scale-105 active:scale-95 shadow-xs cursor-pointer"
                         >
-                          <MessageSquare className="w-4 h-4" />
+                          <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </button>
                       )}
 
                       <button
                         onClick={() => onStartCall(peer, 'audio')}
                         title={`Audio call ${peerName}`}
-                        className="p-2.5 sm:p-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 transition-all hover:scale-105 active:scale-95 shadow-xs cursor-pointer"
+                        className="p-2 sm:p-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 transition-all hover:scale-105 active:scale-95 shadow-xs cursor-pointer"
                       >
-                        <Phone className="w-4 h-4" />
+                        <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       </button>
 
                       <button
                         onClick={() => onStartCall(peer, 'video')}
                         title={`Video call ${peerName}`}
-                        className="p-2.5 sm:p-3 rounded-2xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60 transition-all hover:scale-105 active:scale-95 shadow-xs cursor-pointer"
+                        className="p-2 sm:p-3 rounded-2xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60 transition-all hover:scale-105 active:scale-95 shadow-xs cursor-pointer"
                       >
-                        <Video className="w-4 h-4" />
+                        <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       </button>
 
                       {onDeleteCall && (
                         <button
                           onClick={() => setCallToDelete(call.id)}
                           title="Delete call log"
-                          className="p-2.5 sm:p-3 rounded-2xl opacity-0 group-hover:opacity-100 bg-neutral-100 hover:bg-red-50 dark:bg-neutral-800 dark:hover:bg-red-950/50 text-neutral-400 hover:text-red-500 transition-all hover:scale-105 active:scale-95 shadow-xs cursor-pointer"
+                          className="p-2 sm:p-3 rounded-2xl opacity-100 md:opacity-0 md:group-hover:opacity-100 bg-neutral-100 hover:bg-red-50 dark:bg-neutral-800 dark:hover:bg-red-950/50 text-neutral-400 hover:text-red-500 transition-all hover:scale-105 active:scale-95 shadow-xs cursor-pointer"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </button>
                       )}
                     </div>
