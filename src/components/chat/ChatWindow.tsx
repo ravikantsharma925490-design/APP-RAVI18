@@ -85,7 +85,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const el = chatContainerRef.current;
     if (!el) return true;
     const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    return distanceToBottom < 180;
+    return distanceToBottom < 60;
   }, []);
 
   const handleContainerScroll = useCallback(() => {
@@ -101,18 +101,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // Synchronous instant snap on mount & conversation change BEFORE browser paints
   useLayoutEffect(() => {
     snapToBottom();
-    const frame = requestAnimationFrame(() => {
-      snapToBottom();
-    });
-    return () => cancelAnimationFrame(frame);
   }, [conversation?.id, snapToBottom]);
 
   // Keep pinned to bottom when messages load or change (if user was already at bottom)
   useLayoutEffect(() => {
     if (isNearBottomRef.current && messages.length > 0) {
       snapToBottom();
-      const frame = requestAnimationFrame(() => snapToBottom());
-      return () => cancelAnimationFrame(frame);
     }
   }, [messages.length, snapToBottom]);
 
@@ -259,12 +253,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     if (!content.trim() || sending) return;
     if (isBlocked || !canChat) return;
 
-    await sendMessage(
+    isNearBottomRef.current = true;
+    sendMessage(
       content,
       currentUser || undefined,
       otherUser?.id,
       otherUser || undefined
     );
+    snapToBottom();
   };
 
   const handleClearMessages = async () => {
@@ -534,11 +530,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       <div
         ref={chatContainerRef}
         onScroll={handleContainerScroll}
-        className="flex-1 overflow-y-auto p-4"
+        className="flex-1 overflow-y-auto p-4 [scrollbar-gutter:stable]"
       >
         <div className="flex flex-col min-h-full">
-          {/* Spacer pushing short message lists to bottom naturally without breaking flexbox scrolling */}
-          <div className="flex-1 min-h-0" />
+          {/* Spacer pushing short message lists to bottom naturally without flex margin bugs */}
+          <div className="flex-1 min-h-0 shrink-0" />
 
           {messages.length > 0 ? (
             <div className="space-y-1">
@@ -562,11 +558,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               })}
             </div>
           ) : loading ? (
-            <div className="flex-1 flex flex-col justify-end">
+            <div className="flex flex-col justify-end">
               <ChatSkeleton />
             </div>
           ) : error ? (
-            <div className="p-6 text-center text-sm text-red-500 flex flex-col items-center justify-center flex-1 gap-2">
+            <div className="p-6 text-center text-sm text-red-500 flex flex-col items-center justify-center my-auto gap-2">
               <AlertCircle className="w-6 h-6" />
               <span>{error}</span>
               <button
@@ -577,7 +573,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </button>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="my-auto flex flex-col items-center justify-center">
               <EmptyState type="no-messages" />
             </div>
           )}

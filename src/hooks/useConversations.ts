@@ -253,6 +253,21 @@ export function useConversations(currentUserId?: string, activeTab: string = 'me
       setConversations((prev) => {
         const next = typeof updater === 'function' ? updater(prev) : updater;
         const clean = cleanAndDeduplicateConversations(next, currentUserId);
+        
+        // Prevent unnecessary re-renders if functionally identical
+        if (prev.length === clean.length) {
+          const isIdentical = clean.every((c, i) => 
+            prev[i].id === c.id &&
+            prev[i].unread_count === c.unread_count &&
+            prev[i].last_message?.id === c.last_message?.id &&
+            prev[i].updated_at === c.updated_at
+          );
+          if (isIdentical) {
+            saveLocalConversations(currentUserId, prev);
+            return prev;
+          }
+        }
+
         saveLocalConversations(currentUserId, clean);
         return clean;
       });

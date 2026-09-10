@@ -87,7 +87,8 @@ function cleanAndDeduplicateMessages(msgs: Message[], convId: string | null): Me
       // If new message is answered call log or has richer profile data/read receipt, merge in-place
       const isNewAnswered = m.content?.includes(':answered:') && !prev.content?.includes(':answered:');
       const isNewEnded = m.content?.includes(':ended:') && !prev.content?.includes(':ended:');
-      const resolvedId = (m.id && !m.id.startsWith('temp_')) ? m.id : prev.id;
+      // ALWAYS prefer the established prev.id to prevent oscillation, unless it's a temp ID
+      const resolvedId = (prev.id && !prev.id.startsWith('temp_')) ? prev.id : m.id;
       
       deduplicated[existingIdx] = {
         ...prev,
@@ -232,10 +233,27 @@ export function useMessages(
       setMessages((prev) => {
         const next = typeof updater === 'function' ? updater(prev) : updater;
         const cleanNext = cleanAndDeduplicateMessages(next, conversationId);
+        
         const candidateIds = getCandidateConvIds();
+        
+        // Prevent unnecessary re-renders if the array is functionally identical
+        if (prev.length === cleanNext.length) {
+          const isIdentical = cleanNext.every((m, i) => 
+            prev[i].id === m.id &&
+            prev[i].content === m.content &&
+            Boolean(prev[i].is_read) === Boolean(m.is_read) &&
+            prev[i].sender?.id === m.sender?.id
+          );
+          if (isIdentical) {
+            candidateIds.forEach((cId) => saveLocalMessages(cId, prev));
+            return prev; // Return exact same reference to prevent re-render
+          }
+        }
+
         candidateIds.forEach((cId) => {
           saveLocalMessages(cId, cleanNext);
         });
+        
         return cleanNext;
       });
     },
@@ -839,7 +857,6 @@ export function useMessages(
 
     // 1. Optimistically display in UI immediately
     updateMessagesState((prev) => [...prev, optimisticMessage]);
-    setTimeout(() => scrollToBottom(true), 30);
 
     try {
       const supabase = getSupabase();

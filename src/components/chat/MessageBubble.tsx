@@ -640,7 +640,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     return (
       <div
         className={cn(
-          'flex items-end gap-1.5 my-1.5 animate-in fade-in slide-from-bottom-1 duration-200 group relative',
+          'flex items-end gap-1.5 my-1.5 animate-in fade-in duration-150 group relative',
           isMine ? 'justify-end' : 'justify-start'
         )}
       >
@@ -880,7 +880,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   return (
     <div
       className={cn(
-        'flex items-end gap-1.5 my-1.5 animate-in fade-in slide-from-bottom-1 duration-200 group relative',
+        'flex items-end gap-1.5 my-1.5 animate-in fade-in duration-150 group relative',
         isMine ? 'justify-end' : 'justify-start'
       )}
     >
