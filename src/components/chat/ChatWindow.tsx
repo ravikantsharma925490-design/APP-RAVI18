@@ -245,9 +245,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       (isFollowingUser && isFollowedByUser)
     );
 
-  // canChat & canCall: Can communicate as long as not blocked
-  const canChat = !isBlocked;
-  const canCall = !isBlocked;
+  // canChat & canCall: Can communicate ONLY when mutual follow (or isSelf) and not blocked
+  const canChat = !isBlocked && (isSelf || isMutual);
+  const canCall = !isBlocked && (isSelf || isMutual);
 
   const handleSendMessage = async (content: string) => {
     if (!content.trim() || sending) return;

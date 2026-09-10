@@ -294,14 +294,14 @@ export const SearchTab: React.FC<SearchTabProps> = ({
 
                   {(() => {
                     const isMutual = isSelf || (Boolean(rel?.isFollowing) && Boolean(rel?.isFollowedBy)) || Boolean(rel?.isMutual);
-                    const canCommunicate = isSelf || !rel?.isBlocked;
+                    const canCommunicate = isSelf || (!rel?.isBlocked && isMutual);
 
                     return (
                       <div className="space-y-2">
                         {/* Notice if not mutual */}
                         {!isSelf && !rel?.isBlocked && !isMutual && (
-                          <div className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-[11px] text-emerald-700 dark:text-emerald-300 font-medium flex items-center justify-between">
-                            <span>Ready to connect &bull; 1-click call & chat active</span>
+                          <div className="px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300 font-medium flex items-center justify-between">
+                            <span>Mutual follow required to call & chat</span>
                           </div>
                         )}
 

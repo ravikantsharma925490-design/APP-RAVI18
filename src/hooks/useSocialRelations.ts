@@ -235,7 +235,7 @@ export function useSocialRelations(currentProfile?: Profile | null) {
     // Fast polling to ensure other user's follow-back is reflected immediately
     const pollInterval = setInterval(() => {
       fetchRelations();
-    }, 3000);
+    }, 1500);
 
     return () => clearInterval(pollInterval);
   }, [fetchRelations]);

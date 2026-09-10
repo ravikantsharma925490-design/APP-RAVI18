@@ -600,7 +600,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <div className="grid grid-cols-3 gap-2.5">
                 {(() => {
                   const fStatus = targetUser ? getFollowStatus?.(targetUser.id) : undefined;
-                  const canCommunicate = !relationStatus?.isBlocked;
+                  const isF = fStatus === 'following' || fStatus === 'mutual' || Boolean(relationStatus?.isFollowing);
+                  const isFB = fStatus === 'followed_by' || fStatus === 'mutual' || Boolean(relationStatus?.isFollowedBy);
+                  const isMutual = isSelf || fStatus === 'mutual' || Boolean(relationStatus?.isMutual) || (isF && isFB);
+                  const canCommunicate = !relationStatus?.isBlocked && isMutual;
 
                   return (
                     <>

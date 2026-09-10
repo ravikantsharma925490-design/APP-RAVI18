@@ -174,19 +174,22 @@ function isBlocked(userA: string, userB: string): boolean {
   return blockedStore.has(`${userA}:${userB}`) || blockedStore.has(`${userB}:${userA}`);
 }
 
+function resolveUserId(idOrUsername: string): string {
+  if (!idOrUsername) return '';
+  if (serverProfilesStore.has(idOrUsername)) return idOrUsername;
+  for (const [pId, p] of serverProfilesStore.entries()) {
+    if (p.username && p.username.toLowerCase() === idOrUsername.toLowerCase()) {
+      return pId;
+    }
+  }
+  return idOrUsername;
+}
+
 function isFollowing(followerId: string, followingId: string): boolean {
   if (!followerId || !followingId) return false;
-  if (followsStore.has(`${followerId}:${followingId}`)) return true;
-  
-  // Also check profile usernames if known
-  const pA = serverProfilesStore.get(followerId);
-  const pB = serverProfilesStore.get(followingId);
-  if (pA?.username && pB?.username) {
-    if (followsStore.has(`${pA.username}:${pB.username}`)) return true;
-  }
-  if (pA?.username && followsStore.has(`${pA.username}:${followingId}`)) return true;
-  if (pB?.username && followsStore.has(`${followerId}:${pB.username}`)) return true;
-  return false;
+  const fId = resolveUserId(followerId);
+  const tId = resolveUserId(followingId);
+  return followsStore.has(`${fId}:${tId}`);
 }
 
 function isMutualFollow(userA: string, userB: string): boolean {
@@ -199,35 +202,37 @@ function isMutualFollow(userA: string, userB: string): boolean {
 async function verifyMutualFollow(userA: string, userB: string): Promise<boolean> {
   if (!userA || !userB || userA === userB) return false;
   if (isBlocked(userA, userB)) return false;
+  const uA = resolveUserId(userA);
+  const uB = resolveUserId(userB);
 
-  let aFollowsB = isFollowing(userA, userB);
-  let bFollowsA = isFollowing(userB, userA);
+  let aFollowsB = isFollowing(uA, uB);
+  let bFollowsA = isFollowing(uB, uA);
 
   // 1. Query Supabase DB if available to enrich in-memory store
-  if (serverSupabase) {
+  if (serverSupabase && uA && uB) {
     try {
       const [{ data: rowAtoB }, { data: rowBtoA }] = await Promise.all([
         serverSupabase
           .from('follows')
           .select('follower_id')
-          .eq('follower_id', userA)
-          .eq('following_id', userB)
+          .eq('follower_id', uA)
+          .eq('following_id', uB)
           .maybeSingle(),
         serverSupabase
           .from('follows')
           .select('follower_id')
-          .eq('follower_id', userB)
-          .eq('following_id', userA)
+          .eq('follower_id', uB)
+          .eq('following_id', uA)
           .maybeSingle(),
       ]);
 
       if (rowAtoB) {
         aFollowsB = true;
-        followsStore.add(`${userA}:${userB}`);
+        followsStore.add(`${uA}:${uB}`);
       }
       if (rowBtoA) {
         bFollowsA = true;
-        followsStore.add(`${userB}:${userA}`);
+        followsStore.add(`${uB}:${uA}`);
       }
     } catch (e) {
       // Keep in-memory values
@@ -240,26 +245,16 @@ async function verifyMutualFollow(userA: string, userB: string): Promise<boolean
 function getFollowCounts(userId: string) {
   let followersCount = 0;
   let followingCount = 0;
-  const countedFollowers = new Set<string>();
-  const countedFollowing = new Set<string>();
-
-  const p = serverProfilesStore.get(userId);
-  const uname = p?.username;
+  const canonicalUserId = resolveUserId(userId);
 
   for (const item of followsStore) {
     const [fId, tId] = item.split(':');
     if (!fId || !tId) continue;
-    if (tId === userId || (uname && tId === uname)) {
-      if (!countedFollowers.has(fId)) {
-        countedFollowers.add(fId);
-        followersCount++;
-      }
+    if (tId === canonicalUserId) {
+      followersCount++;
     }
-    if (fId === userId || (uname && fId === uname)) {
-      if (!countedFollowing.has(tId)) {
-        countedFollowing.add(tId);
-        followingCount++;
-      }
+    if (fId === canonicalUserId) {
+      followingCount++;
     }
   }
   return { followersCount, followingCount };
@@ -768,23 +763,7 @@ app.post('/api/relations/status', async (req, res) => {
   }
 });
 
-// All counts overview
-app.get('/api/relations/all-counts', (req, res) => {
-  try {
-    const counts: Record<string, { followers: number; following: number }> = {};
-    for (const item of followsStore) {
-      const [fId, tId] = item.split(':');
-      if (!fId || !tId) continue;
-      if (!counts[fId]) counts[fId] = { followers: 0, following: 0 };
-      if (!counts[tId]) counts[tId] = { followers: 0, following: 0 };
-      counts[fId].following += 1;
-      counts[tId].followers += 1;
-    }
-    return res.json({ counts });
-  } catch (err: any) {
-    return res.status(500).json({ error: 'Failed to get all counts' });
-  }
-});
+
 
 // Sync client local follows to server
 app.post('/api/relations/sync', (req, res) => {
@@ -859,17 +838,8 @@ app.post('/api/relations/follow', async (req, res) => {
       serverProfilesStore.set(targetUserId, { ...(serverProfilesStore.get(targetUserId) || {}), ...targetMeta, id: targetUserId });
     }
 
-    // Add canonical key and alias keys to followsStore
+    // Add canonical key to followsStore
     followsStore.add(`${userId}:${targetUserId}`);
-    if (userMeta?.username && targetMeta?.username) {
-      followsStore.add(`${userMeta.username}:${targetMeta.username}`);
-      followsStore.add(`${userId}:${targetMeta.username}`);
-      followsStore.add(`${userMeta.username}:${targetUserId}`);
-    } else if (userMeta?.username) {
-      followsStore.add(`${userMeta.username}:${targetUserId}`);
-    } else if (targetMeta?.username) {
-      followsStore.add(`${userId}:${targetMeta.username}`);
-    }
 
     // Check if target is already following user (in-memory or in database)
     let wasFollowedByTarget = isFollowing(targetUserId, userId);
@@ -977,19 +947,11 @@ app.post('/api/relations/unfollow', async (req, res) => {
       return res.status(400).json({ error: 'userId and targetUserId are required' });
     }
 
-    const pUser = serverProfilesStore.get(userId);
-    const pTarget = serverProfilesStore.get(targetUserId);
+    const uId = resolveUserId(userId);
+    const tId = resolveUserId(targetUserId);
 
-    // Clean up all permutations in followsStore for this follower -> following direction
-    for (const item of Array.from(followsStore)) {
-      const [f, t] = item.split(':');
-      if (
-        (f === userId || (userUsername && f === userUsername) || (pUser?.username && f === pUser.username)) &&
-        (t === targetUserId || (targetUsername && t === targetUsername) || (pTarget?.username && t === pTarget.username))
-      ) {
-        followsStore.delete(item);
-      }
-    }
+    followsStore.delete(`${uId}:${tId}`);
+    followsStore.delete(`${userId}:${targetUserId}`);
 
     // If serverSupabase is connected, delete from DB directly
     if (serverSupabase) {
@@ -1226,10 +1188,8 @@ app.post('/api/calls/create', async (req, res) => {
       return res.status(403).json({ error: 'Cannot call blocked user' });
     }
 
-    // Auto-link users as mutual follows upon placing a call
-    if (call.caller_id !== call.callee_id) {
-      followsStore.add(`${call.caller_id}:${call.callee_id}`);
-      followsStore.add(`${call.callee_id}:${call.caller_id}`);
+    if (call.caller_id !== call.callee_id && !isMutualFollow(call.caller_id, call.callee_id)) {
+      return res.status(403).json({ error: 'Mutual follow is required to place calls' });
     }
 
     const callerObj = callerMeta || serverProfilesStore.get(call.caller_id) || {
@@ -1846,17 +1806,15 @@ app.post('/api/messages/send', async (req, res) => {
       }
     }
 
-    // Communication check: 1-to-1 messaging allowed as long as not blocked
+    // Communication check: Mutual follow required for 1-to-1 messaging unless self-messaging
     if (targetRecipient && targetRecipient !== senderId) {
       if (isBlocked(senderId, targetRecipient)) {
         return res.status(403).json({ error: 'Cannot message blocked user' });
       }
 
-      // Auto-establish connection between sender and receiver on message
-      try {
-        followsStore.add(`${senderId}:${targetRecipient}`);
-        followsStore.add(`${targetRecipient}:${senderId}`);
-      } catch {}
+      if (!isMutualFollow(senderId, targetRecipient)) {
+        return res.status(403).json({ error: 'Mutual follow is required to send messages' });
+      }
     }
 
     const recProfile = recipientProfile || receiverProfile;
