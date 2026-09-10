@@ -22,10 +22,10 @@ import { uploadMediaToServer } from '@/src/lib/mediaUpload';
 // Determine optimal supported audio MIME type across Chrome, Safari, Android & iOS
 function getOptimalAudioMimeType(): string {
   const mimeTypes = [
-    'audio/mp4;codecs=mp4a.40.2',
-    'audio/mp4',
-    'audio/webm;codecs=opus',
+    'audio/webm;codecs=opus', // Prioritize highest quality open codec
     'audio/webm',
+    'audio/mp4;codecs=mp4a.40.2', // Fallback for Safari/iOS
+    'audio/mp4',
     'audio/aac',
     'audio/ogg;codecs=opus',
     'audio/wav',
@@ -45,8 +45,10 @@ function getOptimalAudioMimeType(): string {
 // Mobile-friendly Studio Voice Note Recording Constraints
 export const REAL_VOICE_NOTE_CONSTRAINTS: MediaTrackConstraints = {
   echoCancellation: true,
-  noiseSuppression: true,
-  autoGainControl: true,
+  noiseSuppression: true, // Enabled to remove background noise
+  autoGainControl: true, // Enabled to automatically adjust microphone volume
+  sampleRate: { ideal: 48000 },
+  channelCount: { ideal: 1 },
 };
 const EMOJI_CATEGORIES = [
   {
@@ -470,9 +472,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     const duration = Math.max(1, recordingSeconds);
 
-    mediaRecorder.onstop = async () => {
+      mediaRecorder.onstop = async () => {
       // Small pause to allow final ondataavailable to deliver
-      await new Promise((r) => setTimeout(r, 80));
+      await new Promise((r) => setTimeout(r, 150));
 
       const optimalType = getOptimalAudioMimeType();
       const rawMime = mediaRecorder.mimeType || optimalType || 'audio/webm';

@@ -78,7 +78,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     clearAllMessages,
     fetchMessages,
     markMessagesAsRead,
-  } = useMessages(conversation?.id || null, currentUser?.id, isChatVisible);
+  } = useMessages(conversation?.id || null, currentUser?.id, isChatVisible, conversation);
 
   // Scroll helpers
   const checkIsNearBottom = useCallback(() => {

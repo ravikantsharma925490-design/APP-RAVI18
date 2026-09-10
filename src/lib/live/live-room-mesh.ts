@@ -5,13 +5,35 @@
  * for instant 0ms cross-tab audio, and HTTP server signaling for cross-device audio.
  */
 
-const ICE_SERVERS: RTCConfiguration = {
+let ICE_SERVERS: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
+    // ExpressTurn Premium Static Server
+    {
+      urls: 'turn:free.expressturn.com:3478',
+      username: '000000002104365271',
+      credential: 'Jm1+P1ebN0sYSg6A3DHDSfciAys=',
+    },
+    // Static fallback TURN servers
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
   iceCandidatePoolSize: 6,
 };

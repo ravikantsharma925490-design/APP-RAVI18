@@ -700,10 +700,11 @@ export function useMessages(
 
     // Fast polling cycle that synchronizes both sides
     const pollInterval = setInterval(() => {
+      const currentCandidateIds = getCandidateConvIds();
       fetch('/api/messages/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId }),
+        body: JSON.stringify({ conversationId, candidateIds: currentCandidateIds }),
       })
         .then((res) => (res.ok ? res.json() : null))
         .then((json) => {
@@ -885,13 +886,13 @@ export function useMessages(
 
       const { data: savedMsg, error: sendError } = await supabase
         .from('messages')
-        .insert({
+        .upsert({
           id: tempId,
           conversation_id: conversationId,
           sender_id: currentUserId,
           content: processedContent,
           created_at: nowIso,
-        })
+        }, { onConflict: 'id' })
         .select()
         .single();
 

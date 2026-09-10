@@ -37,8 +37,10 @@ function generateCallUUID(): string {
 // Studio Voice Audio Constraints for Live Calls (Mobile-safe & desktop-optimized)
 export const HD_CALL_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
   echoCancellation: true,
-  noiseSuppression: true,
-  autoGainControl: true,
+  noiseSuppression: true, // Enabled to remove background noise
+  autoGainControl: true, // Enabled to automatically adjust microphone volume
+  sampleRate: { ideal: 48000 },
+  channelCount: { ideal: 1 },
 };
 
 // High Definition (1080p / 720p 30fps) Video Constraints (Mobile-safe ideal parameters)
@@ -414,6 +416,128 @@ export function useCall(
     const supabase = getSupabase();
 
     // 1. Supabase Realtime Channel
+    const handleIncomingCallRealtime = async (newCall: Call) => {
+      // Avoid ringing ourselves if cross-device self-call
+      if (newCall.callerDeviceId && newCall.callerDeviceId === getClientDeviceId()) return;
+      if (activeCallStateRef.current?.call.id === newCall.id) return;
+
+      if (newCall.status === 'calling' || newCall.status === 'ringing') {
+        // Fetch caller profile
+        const { data: callerProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', newCall.caller_id)
+          .single();
+
+        const callWithCaller: Call = {
+          ...newCall,
+          caller: (callerProfile as Profile) || undefined,
+        };
+
+        incomingCallReceivedAtRef.current = Date.now();
+        setIncomingCall(callWithCaller);
+
+        // Record incoming call in call history
+        const fallbackPeer = createFallbackProfile(newCall.caller_id, 'Caller');
+        recordCallInHistory(currentUser.id, {
+          ...callWithCaller,
+          peer: (callerProfile as Profile) || fallbackPeer,
+          direction: 'incoming',
+          isMissed: false,
+          durationFormatted: 'Ringing...',
+        });
+
+        // Play ringtone if user hasn't muted call ringtones
+        const isCallSoundEnabled = localStorage.getItem('liveconnect_perm_call_sound') !== 'false';
+        if (isCallSoundEnabled) {
+          audioTones.startIncomingRingtone();
+        }
+
+        // Dispatch push notification
+        const callerName = callerProfile?.display_name || 'Someone';
+        notificationService.sendNotification({
+          title: `Incoming ${newCall.call_type === 'video' ? 'Video' : 'Voice'} Call`,
+          body: `${callerName} is calling you on LiveConnect...`,
+          icon: callerProfile?.avatar_url || '/favicon.ico',
+          tag: `call-${newCall.id}`,
+        });
+
+        // Update call status to ringing
+        supabase
+          .from('calls')
+          .update({ status: 'ringing' })
+          .eq('id', newCall.id)
+          .then(() => {});
+
+        fetch('/api/calls/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ callId: newCall.id, action: 'ring', userId: currentUser.id }),
+        }).catch(() => {});
+      }
+    };
+
+    const handleCallActionRealtime = async (updatedCall: Partial<Call>) => {
+      if (!updatedCall.id || !updatedCall.status) return;
+      const currentIncoming = incomingCallRef.current;
+      const currentActive = activeCallStateRef.current;
+
+      // If incoming call was cancelled or missed
+      if (currentIncoming && currentIncoming.id === updatedCall.id) {
+        if (['cancelled', 'ended', 'missed', 'rejected'].includes(updatedCall.status)) {
+          audioTones.stop();
+          setIncomingCall(null);
+          updateCallInHistory(currentUser.id, updatedCall.id, {
+            status: updatedCall.status,
+            ended_at: updatedCall.ended_at || new Date().toISOString(),
+          });
+        }
+      }
+
+      // If active call status changed
+      if (currentActive && currentActive.call.id === updatedCall.id) {
+        if (updatedCall.status === 'accepted' && currentActive.status !== 'connected') {
+          audioTones.stop();
+          // Clear auto-cancel timeout since call was accepted
+          if (callTimeoutRef.current) {
+            clearTimeout(callTimeoutRef.current);
+            callTimeoutRef.current = null;
+          }
+
+          if (updatedCall.calleeDeviceId) {
+            currentActive.call.calleeDeviceId = updatedCall.calleeDeviceId;
+          }
+
+          setActiveCallState((prev) => (prev ? { ...prev, status: 'connected' } : null));
+          updateCallInHistory(currentUser.id, updatedCall.id, {
+            status: 'accepted',
+            answered_at: new Date().toISOString(),
+            durationFormatted: 'Connected',
+          });
+
+          // Connect caller to room
+          if (currentActive.isCaller) {
+            await connectToCallRoom({ ...currentActive.call, ...updatedCall } as Call, currentActive.call.call_type === 'video');
+          }
+        } else if (['rejected', 'ended', 'cancelled', 'failed', 'missed'].includes(updatedCall.status)) {
+          const wasConnected = currentActive.status === 'connected' || (currentActive.durationSeconds || 0) > 0;
+          const callId = updatedCall.id;
+          audioTones.playCallEndedSound();
+          await cleanupMediaSession();
+          setActiveCallState(null);
+          updateCallInHistory(currentUser.id, updatedCall.id, {
+            status: updatedCall.status,
+            ended_at: updatedCall.ended_at || new Date().toISOString(),
+          });
+
+          // Trigger AdMob Interstitial Ad (Android only, completed calls only, at most once per call session)
+          if (wasConnected && updatedCall.status === 'ended') {
+            admobService.showPostCallInterstitial(callId, true).catch(() => {});
+          }
+        }
+      }
+    };
+
     const channel = supabase
       .channel(`calls_channel_${currentUser.id}`)
       .on(
@@ -425,61 +549,14 @@ export function useCall(
           filter: `callee_id=eq.${currentUser.id}`,
         },
         async (payload) => {
-          const newCall = payload.new as Call;
-          if (newCall.status === 'calling' || newCall.status === 'ringing') {
-            // Fetch caller profile
-            const { data: callerProfile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', newCall.caller_id)
-              .single();
-
-            const callWithCaller: Call = {
-              ...newCall,
-              caller: (callerProfile as Profile) || undefined,
-            };
-
-            incomingCallReceivedAtRef.current = Date.now();
-            setIncomingCall(callWithCaller);
-
-            // Record incoming call in call history
-            const fallbackPeer = createFallbackProfile(newCall.caller_id, 'Caller');
-            recordCallInHistory(currentUser.id, {
-              ...callWithCaller,
-              peer: (callerProfile as Profile) || fallbackPeer,
-              direction: 'incoming',
-              isMissed: false,
-              durationFormatted: 'Ringing...',
-            });
-
-            // Play ringtone if user hasn't muted call ringtones
-            const isCallSoundEnabled = localStorage.getItem('liveconnect_perm_call_sound') !== 'false';
-            if (isCallSoundEnabled) {
-              audioTones.startIncomingRingtone();
-            }
-
-            // Dispatch push notification
-            const callerName = callerProfile?.display_name || 'Someone';
-            notificationService.sendNotification({
-              title: `Incoming ${newCall.call_type === 'video' ? 'Video' : 'Voice'} Call`,
-              body: `${callerName} is calling you on LiveConnect...`,
-              icon: callerProfile?.avatar_url || '/favicon.ico',
-              tag: `call-${newCall.id}`,
-            });
-
-            // Update call status to ringing
-            supabase
-              .from('calls')
-              .update({ status: 'ringing' })
-              .eq('id', newCall.id)
-              .then(() => {});
-
-            fetch('/api/calls/action', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ callId: newCall.id, action: 'ring', userId: currentUser.id }),
-            }).catch(() => {});
-          }
+          handleIncomingCallRealtime(payload.new as Call);
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'incoming_call' },
+        (payload) => {
+          handleIncomingCallRealtime(payload.payload as Call);
         }
       )
       .on(
@@ -490,60 +567,19 @@ export function useCall(
           table: 'calls',
         },
         async (payload) => {
-          const updatedCall = payload.new as Call;
-          const currentIncoming = incomingCallRef.current;
-          const currentActive = activeCallStateRef.current;
-
-          // If incoming call was cancelled or missed
-          if (currentIncoming && currentIncoming.id === updatedCall.id) {
-            if (['cancelled', 'ended', 'missed', 'rejected'].includes(updatedCall.status)) {
-              audioTones.stop();
-              setIncomingCall(null);
-              updateCallInHistory(currentUser.id, updatedCall.id, {
-                status: updatedCall.status,
-                ended_at: updatedCall.ended_at || new Date().toISOString(),
-              });
-            }
-          }
-
-          // If active call status changed
-          if (currentActive && currentActive.call.id === updatedCall.id) {
-            if (updatedCall.status === 'accepted' && currentActive.status !== 'connected') {
-              audioTones.stop();
-              // Clear auto-cancel timeout since call was accepted
-              if (callTimeoutRef.current) {
-                clearTimeout(callTimeoutRef.current);
-                callTimeoutRef.current = null;
-              }
-
-              setActiveCallState((prev) => (prev ? { ...prev, status: 'connected' } : null));
-              updateCallInHistory(currentUser.id, updatedCall.id, {
-                status: 'accepted',
-                answered_at: new Date().toISOString(),
-                durationFormatted: 'Connected',
-              });
-
-              // Connect caller to room
-              if (currentActive.isCaller) {
-                await connectToCallRoom(updatedCall, updatedCall.call_type === 'video');
-              }
-            } else if (['rejected', 'ended', 'cancelled', 'failed', 'missed'].includes(updatedCall.status)) {
-              const wasConnected = currentActive.status === 'connected' || (currentActive.durationSeconds || 0) > 0;
-              const callId = updatedCall.id;
-              audioTones.playCallEndedSound();
-              await cleanupMediaSession();
-              setActiveCallState(null);
-              updateCallInHistory(currentUser.id, updatedCall.id, {
-                status: updatedCall.status,
-                ended_at: updatedCall.ended_at || new Date().toISOString(),
-              });
-
-              // Trigger AdMob Interstitial Ad (Android only, completed calls only, at most once per call session)
-              if (wasConnected && updatedCall.status === 'ended') {
-                admobService.showPostCallInterstitial(callId, true).catch(() => {});
-              }
-            }
-          }
+          handleCallActionRealtime(payload.new as Call);
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'call_action' },
+        (payload) => {
+          const { callId, action, status, calleeDeviceId } = payload.payload;
+          handleCallActionRealtime({
+             id: callId,
+             status,
+             calleeDeviceId
+          } as Partial<Call>);
         }
       )
       .subscribe();

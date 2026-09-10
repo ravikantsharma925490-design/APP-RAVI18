@@ -282,8 +282,13 @@ const VoiceNotePlayer = ({
       if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) {
         setTotalDuration(Math.round(audio.duration));
       }
+      // If we've reached the known duration but the audio hasn't fired 'ended' yet, we should pause it manually.
       if (totalDuration > 0 && audio.currentTime >= totalDuration) {
+        if (!audio.paused) {
+          audio.pause();
+        }
         setIsPlaying(false);
+        setCurrentTime(0);
       }
     };
 
@@ -310,6 +315,15 @@ const VoiceNotePlayer = ({
           prevBlobUrlRef.current = recoveredUrl;
           setPlayableSrc(recoveredUrl);
           setHasError(false);
+          setTimeout(async () => {
+            if (audioRef.current) {
+              try {
+                audioRef.current.playbackRate = playbackRate;
+                await audioRef.current.play();
+                setIsPlaying(true);
+              } catch {}
+            }
+          }, 100);
           return;
         }
       }

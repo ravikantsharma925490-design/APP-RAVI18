@@ -11,7 +11,7 @@ import { handleLiveApiRequest } from './src/lib/live/live-api-router';
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -1278,7 +1278,7 @@ app.post('/api/calls/create', async (req, res) => {
     addNotification(
       call.callee_id,
       call.caller_id,
-      'call',
+      call.call_type === 'video' ? 'call_video' : 'call_audio',
       `Incoming ${call.call_type === 'video' ? 'Video' : 'Voice'} Call`,
       `${callerName} is calling you...`,
       newCall.id,
@@ -1287,6 +1287,14 @@ app.post('/api/calls/create', async (req, res) => {
 
     // Also sync to Supabase calls table in background if available
     if (serverSupabase) {
+      serverSupabase
+        .channel(`calls_channel_${newCall.callee_id}`)
+        .send({
+          type: 'broadcast',
+          event: 'incoming_call',
+          payload: newCall,
+        });
+
       serverSupabase
         .from('calls')
         .upsert(
@@ -1480,6 +1488,22 @@ app.post('/api/calls/action', (req, res) => {
 
     // Sync to Supabase in background
     if (serverSupabase) {
+      serverSupabase
+        .channel(`calls_channel_${call.caller_id}`)
+        .send({
+          type: 'broadcast',
+          event: 'call_action',
+          payload: { callId, action, status: call.status, calleeDeviceId }
+        });
+
+      serverSupabase
+        .channel(`calls_channel_${call.callee_id}`)
+        .send({
+          type: 'broadcast',
+          event: 'call_action',
+          payload: { callId, action, status: call.status, calleeDeviceId }
+        });
+
       serverSupabase
         .from('calls')
         .update({

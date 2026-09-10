@@ -29,6 +29,11 @@ const GLOBAL_DEFAULT_ICE_SERVERS: RTCConfiguration = {
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:stun.services.mozilla.com' },
     {
+      urls: 'turn:free.expressturn.com:3478',
+      username: '000000002104365271',
+      credential: 'Jm1+P1ebN0sYSg6A3DHDSfciAys=',
+    },
+    {
       urls: [
         'turn:openrelay.metered.ca:80',
         'turn:openrelay.metered.ca:443',
@@ -45,23 +50,6 @@ const GLOBAL_DEFAULT_ICE_SERVERS: RTCConfiguration = {
 };
  
 let cachedIceConfiguration: RTCConfiguration = GLOBAL_DEFAULT_ICE_SERVERS;
- 
-const METERED_APP_NAME: string = 'liveconnect-app';
-const METERED_API_KEY: string = 'e29aebb8d8aa7fa8681c6ef7be622e9f9c6d';
- 
-if (typeof window !== 'undefined' && METERED_API_KEY !== 'YOUR_API_KEY') {
-  fetch(`https://${METERED_APP_NAME}.metered.live/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`)
-    .then((r) => r.json())
-    .then((iceServers) => {
-      if (Array.isArray(iceServers) && iceServers.length > 0) {
-        cachedIceConfiguration = {
-          ...GLOBAL_DEFAULT_ICE_SERVERS,
-          iceServers: [...iceServers, ...(GLOBAL_DEFAULT_ICE_SERVERS.iceServers || [])],
-        };
-      }
-    })
-    .catch(() => {});
-}
  
 function enhanceMediaSDP(sdpText?: string): string {
   if (!sdpText) return '';
@@ -101,7 +89,7 @@ function enhanceMediaSDP(sdpText?: string): string {
           map.set('cbr', '0');
           map.set('maxplaybackrate', '48000');
           map.set('sprop-maxcapturerate', '48000');
-          map.set('usedtx', '1');
+          map.set('usedtx', '0');
  
           const formatted = Array.from(map.entries())
             .map(([k, v]) => (v ? `${k}=${v}` : k))
@@ -109,7 +97,7 @@ function enhanceMediaSDP(sdpText?: string): string {
           return `a=fmtp:${pt} ${formatted}`;
         });
       } else {
-        const hdParams = 'minptime=10;ptime=20;useinbandfec=1;maxaveragebitrate=96000;stereo=0;sprop-stereo=0;cbr=0;maxplaybackrate=48000;sprop-maxcapturerate=48000;usedtx=1';
+        const hdParams = 'minptime=10;ptime=20;useinbandfec=1;maxaveragebitrate=96000;stereo=0;sprop-stereo=0;cbr=0;maxplaybackrate=48000;sprop-maxcapturerate=48000;usedtx=0';
         sdp = sdp.replace(
           new RegExp(`(a=rtpmap:${pt}\\s+opus\\/48000\\/2\r?\n)`, 'i'),
           `$1a=fmtp:${pt} ${hdParams}\r\n`

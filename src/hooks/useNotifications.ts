@@ -45,7 +45,7 @@ export function useNotifications(currentUserId?: string) {
         return;
       }
 
-      const rawNotifs = data || [];
+      const rawNotifs = (data || []).filter((n: any) => n.title !== 'LIVE_CALL_SIGNAL');
       const actorIds = Array.from(new Set(rawNotifs.map((n) => n.actor_id)));
       let profileMap: Record<string, Profile> = {};
 
@@ -101,6 +101,9 @@ export function useNotifications(currentUserId?: string) {
         },
         async (payload) => {
           const newNotif = payload.new as AppNotification;
+          if (newNotif.title === 'LIVE_CALL_SIGNAL') {
+            return; // Handled exclusively by useCall real-time signaling
+          }
 
           // Fetch actor profile
           let actorProfile: Profile | undefined;
