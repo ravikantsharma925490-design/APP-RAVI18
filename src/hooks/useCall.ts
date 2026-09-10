@@ -289,6 +289,9 @@ export function useCall(
               onError: (err) => {
                 console.warn('WebRTC P2P notice:', err.message);
               },
+              onNetworkQualityChange: (quality) => {
+                setActiveCallState((prev) => prev ? { ...prev, networkQuality: quality } : null);
+              },
             },
             currentDeviceId,
             targetDeviceId

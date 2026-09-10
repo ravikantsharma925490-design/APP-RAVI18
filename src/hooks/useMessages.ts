@@ -243,16 +243,8 @@ export function useMessages(
   );
 
   const scrollToBottom = useCallback((smooth = true) => {
-    if (messagesEndRef.current) {
-      try {
-        messagesEndRef.current.scrollIntoView({
-          behavior: smooth ? 'smooth' : 'auto',
-          block: 'end',
-        });
-      } catch (e) {
-        // fallback
-      }
-    }
+    // Scroll logic is now fully handled by ChatWindow.tsx via ResizeObserver and useLayoutEffect
+    // This empty function is kept to maintain the hook's return signature
   }, []);
 
   const fetchMessages = useCallback(async () => {
@@ -613,8 +605,6 @@ export function useMessages(
               },
             ];
           });
-
-          setTimeout(() => scrollToBottom(true), 50);
         }
       )
       .on(

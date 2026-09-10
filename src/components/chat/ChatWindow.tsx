@@ -96,10 +96,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
-    }
-  }, [messagesEndRef]);
+  }, []);
 
   // Synchronous instant snap on mount & conversation change BEFORE browser paints
   useLayoutEffect(() => {
@@ -118,6 +115,36 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       return () => cancelAnimationFrame(frame);
     }
   }, [messages.length, snapToBottom]);
+
+  // Prevent jumping when images load or content expands
+  useLayoutEffect(() => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+
+    const innerContainer = el.firstElementChild;
+    if (!innerContainer) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (isNearBottomRef.current) {
+        // If we were at the bottom before the resize, stay at the bottom
+        snapToBottom();
+      }
+    });
+
+    resizeObserver.observe(innerContainer);
+
+    const handleWindowResize = () => {
+      if (isNearBottomRef.current) {
+        snapToBottom();
+      }
+    };
+    window.addEventListener('resize', handleWindowResize);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
+    };
+  }, [snapToBottom]);
 
   // Ensure unread messages are marked as read when ChatWindow is actively visible
   useEffect(() => {

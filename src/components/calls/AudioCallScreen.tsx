@@ -1,7 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Mic, MicOff, PhoneOff, ShieldCheck, Volume2, Volume1, Sparkles, VolumeX } from 'lucide-react';
 import { ActiveCallState, ConnectionState } from '@/src/types';
 import { cn, formatDuration, getAvatarColor, getInitials } from '@/src/lib/utils';
+
+interface AudioRoutePlugin {
+  setSpeakerphoneOn(options: { on: boolean }): Promise<{ success: boolean }>;
+  resetAudioMode(): Promise<{ success: boolean }>;
+}
+const AudioRoute = registerPlugin<AudioRoutePlugin>('AudioRoute');
+
+import { NetworkQualityIndicator } from './NetworkQualityIndicator';
 
 interface AudioCallScreenProps {
   activeCallState?: ActiveCallState;
@@ -42,7 +51,7 @@ export const AudioCallScreen: React.FC<AudioCallScreenProps> = ({
     }
 
     if (audioEl.srcObject) {
-      audioEl.volume = isSpeakerOn ? 1.0 : 0.35;
+      audioEl.volume = 1.0;
       audioEl
         .play()
         .then(() => {
@@ -110,6 +119,22 @@ export const AudioCallScreen: React.FC<AudioCallScreenProps> = ({
     };
   }, [isConnected, remoteAudioRef]);
 
+  // Set initial native audio route when call connects
+  useEffect(() => {
+    if (isConnected && Capacitor.isNativePlatform()) {
+      AudioRoute.setSpeakerphoneOn({ on: isSpeakerOn }).catch(() => {});
+    }
+  }, [isConnected]);
+
+  // Reset audio mode on unmount/end call
+  useEffect(() => {
+    return () => {
+      if (Capacitor.isNativePlatform()) {
+        AudioRoute.resetAudioMode().catch(() => {});
+      }
+    };
+  }, []);
+
   if (!currentCallState) return null;
 
   const { peer, localAudioEnabled, durationSeconds, isCaller } = currentCallState;
@@ -122,14 +147,17 @@ export const AudioCallScreen: React.FC<AudioCallScreenProps> = ({
   };
 
   const toggleSpeaker = () => {
-    const audioEl = remoteAudioRef?.current;
     const nextSpeakerState = !isSpeakerOn;
     setIsSpeakerOn(nextSpeakerState);
+    if (Capacitor.isNativePlatform()) {
+      AudioRoute.setSpeakerphoneOn({ on: nextSpeakerState }).catch(() => {});
+    }
+    const audioEl = remoteAudioRef?.current;
     if (audioEl) {
-      audioEl.volume = nextSpeakerState ? 1.0 : 0.35;
+      audioEl.volume = 1.0;
       audioEl.play().catch(() => {});
     }
-    showFeedback(nextSpeakerState ? 'Loudspeaker (100%)' : 'Earpiece Mode (35%)');
+    showFeedback(nextSpeakerState ? 'Loudspeaker' : 'Earpiece Mode');
   };
 
   const handleManualAudioResume = (e?: React.MouseEvent) => {
@@ -139,7 +167,7 @@ export const AudioCallScreen: React.FC<AudioCallScreenProps> = ({
       if (!audioEl.srcObject && (window as any).__liveconnect_active_remote_stream) {
         audioEl.srcObject = (window as any).__liveconnect_active_remote_stream;
       }
-      audioEl.volume = isSpeakerOn ? 1.0 : 0.35;
+      audioEl.volume = 1.0;
       audioEl
         .play()
         .then(() => {
@@ -159,6 +187,8 @@ export const AudioCallScreen: React.FC<AudioCallScreenProps> = ({
       onClick={handleManualAudioResume}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/95 backdrop-blur-xl animate-in fade-in select-none"
     >
+      <NetworkQualityIndicator quality={currentCallState.networkQuality} />
+      
       {/* Dedicated audio element to playback peer audio with crystal clarity */}
       <audio ref={remoteAudioRef} autoPlay playsInline />
 
@@ -318,6 +348,9 @@ export const AudioCallScreen: React.FC<AudioCallScreenProps> = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                if (Capacitor.isNativePlatform()) {
+                  AudioRoute.resetAudioMode().catch(() => {});
+                }
                 onEndCall();
               }}
               title="End Call"

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { ActiveCallState, ConnectionState } from '@/src/types';
 import { cn, formatDuration, getAvatarColor, getInitials } from '@/src/lib/utils';
+import { NetworkQualityIndicator } from './NetworkQualityIndicator';
 
 interface VideoCallScreenProps {
   activeCallState?: ActiveCallState;
@@ -99,6 +100,8 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       onClick={handleContainerClick}
       className="fixed inset-0 z-50 bg-black flex flex-col justify-between text-white overflow-hidden select-none animate-in fade-in"
     >
+      <NetworkQualityIndicator quality={currentCallState.networkQuality} />
+
       {/* Dedicated clean audio element to playback peer audio without distortion or echo */}
       <audio ref={remoteAudioRef} autoPlay playsInline />
 

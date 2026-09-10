@@ -160,6 +160,7 @@ export interface ActiveCallState {
   isFrontCamera: boolean;
   connectedAt?: Date;
   durationSeconds: number;
+  networkQuality?: 'excellent' | 'good' | 'poor';
 }
 
 export * from './live';
