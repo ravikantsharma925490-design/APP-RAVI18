@@ -59,9 +59,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   return (
     <nav
       aria-label="Bottom Navigation"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-lg border-t border-neutral-200 dark:border-neutral-800 shadow-lg px-1 pb-[env(safe-area-inset-bottom,8px)] pt-1"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-lg border-t border-neutral-200 dark:border-neutral-800 shadow-lg px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5"
     >
-      <div className="grid grid-cols-5 items-center justify-between max-w-lg mx-auto">
+      <div className="grid grid-cols-4 items-center justify-around max-w-lg mx-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id || (item.id === 'calls' && (activeTab as any) === 'call-history');
@@ -71,7 +71,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               key={item.id}
               onClick={() => onChangeTab(item.id)}
               className={cn(
-                'flex flex-col items-center justify-center py-1.5 px-0.5 rounded-2xl transition-all duration-150 relative min-h-[56px] cursor-pointer',
+                'flex flex-col items-center justify-center py-1 px-1 rounded-2xl transition-all duration-150 relative min-h-[52px] cursor-pointer group',
                 isActive
                   ? item.isLive
                     ? 'text-red-600 dark:text-red-400 font-bold'
@@ -82,12 +82,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               <div className="relative flex items-center justify-center">
                 <div
                   className={cn(
-                    'p-1.5 rounded-xl transition-all',
+                    'px-3.5 py-1 rounded-full transition-all duration-200 flex items-center justify-center',
                     isActive
                       ? item.isLive
-                        ? 'bg-red-50 dark:bg-red-950/70 text-red-600 dark:text-red-400 scale-105'
-                        : 'bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 scale-105'
-                      : 'bg-transparent text-current'
+                        ? 'bg-red-100 dark:bg-red-950/80 text-red-600 dark:text-red-400 scale-105 shadow-xs'
+                        : 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 scale-105 shadow-xs'
+                      : 'bg-transparent text-current group-hover:bg-neutral-100 dark:group-hover:bg-neutral-800/60'
                   )}
                 >
                   <Icon className="w-5 h-5" />
@@ -95,20 +95,20 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
                 {/* Badge Indicator */}
                 {Boolean(item.badge && item.badge > 0) && (
-                  <span className="absolute -top-1 -right-2 min-w-[16px] h-[16px] px-1 text-[9px] font-bold text-white bg-red-500 rounded-full flex items-center justify-center border-2 border-white dark:border-neutral-900 shadow-xs animate-in zoom-in">
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 text-[9px] font-bold text-white bg-red-500 rounded-full flex items-center justify-center border-2 border-white dark:border-neutral-900 shadow-xs animate-in zoom-in">
                     {item.badge! > 99 ? '99+' : item.badge}
                   </span>
                 )}
 
                 {/* Live pulsing dot */}
                 {item.isLive && !isActive && (
-                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                  <span className="absolute top-0 right-1 w-2 h-2 rounded-full bg-red-500 animate-ping" />
                 )}
               </div>
 
               <span
                 className={cn(
-                  'text-[9px] sm:text-[10px] tracking-tight leading-tight mt-0.5 transition-colors text-center truncate max-w-[60px]',
+                  'text-[10px] tracking-tight leading-tight mt-1 transition-colors text-center truncate max-w-[72px]',
                   isActive
                     ? item.isLive
                       ? 'text-red-600 dark:text-red-400 font-bold'
