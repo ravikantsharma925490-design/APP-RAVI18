@@ -206,6 +206,8 @@ export function useMessages(
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const channelRef = useRef<any>(null);
+  const [typingUserId, setTypingUserId] = useState<string | null>(null);
+  const typingTimeoutRef = useRef<any>(null);
   const isViewingChatRef = useRef<boolean>(isViewingChat);
   isViewingChatRef.current = isViewingChat;
   const lastSentContentRef = useRef<{ content: string; time: number } | null>(null);
@@ -507,6 +509,17 @@ export function useMessages(
     }
   }, [conversationId, currentUserId, messages, updateMessagesState]);
 
+  const sendTypingSignal = useCallback(() => {
+    if (!channelRef.current || !conversationId || !currentUserId) return;
+    channelRef.current
+      .send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { conversationId, userId: currentUserId },
+      })
+      .catch(() => {});
+  }, [conversationId, currentUserId]);
+
   // Automatically mark unread messages as read when active/loaded
   useEffect(() => {
     if (!conversationId || !currentUserId || !isViewingChat) return;
@@ -708,6 +721,19 @@ export function useMessages(
           );
         }
       )
+      .on(
+        'broadcast',
+        { event: 'typing' },
+        (payload) => {
+          const senderId = payload?.payload?.userId;
+          if (!senderId || senderId === currentUserId) return;
+          setTypingUserId(senderId);
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = setTimeout(() => {
+            setTypingUserId(null);
+          }, 3000);
+        }
+      )
       .subscribe();
 
     channelRef.current = channel;
@@ -777,6 +803,7 @@ export function useMessages(
 
     return () => {
       clearInterval(pollInterval);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
       }
@@ -1055,5 +1082,7 @@ export function useMessages(
     fetchMessages,
     scrollToBottom,
     markMessagesAsRead,
+    typingUserId,
+    sendTypingSignal,
   };
 }

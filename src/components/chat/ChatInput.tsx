@@ -186,6 +186,7 @@ interface ChatInputProps {
   displayName: string;
   disabled?: boolean;
   sending?: boolean;
+  onTyping?: () => void;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -193,6 +194,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   displayName,
   disabled = false,
   sending = false,
+  onTyping,
 }) => {
   const [inputText, setInputText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -216,6 +218,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const emojiModalRef = useRef<HTMLDivElement | null>(null);
   const stickerModalRef = useRef<HTMLDivElement | null>(null);
   const isSubmittingRef = useRef<boolean>(false);
+  const lastTypingSentRef = useRef<number>(0);
 
   // Close modals on outside click
   useEffect(() => {
@@ -790,7 +793,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             type="text"
             placeholder={stagedImage ? "Add a caption..." : `Message ${displayName || ''}...`}
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={(e) => {
+              setInputText(e.target.value);
+              if (onTyping) {
+                const now = Date.now();
+                if (!lastTypingSentRef.current || now - lastTypingSentRef.current > 2000) {
+                  lastTypingSentRef.current = now;
+                  onTyping();
+                }
+              }
+            }}
             disabled={disabled}
             className="flex-1 min-w-0 bg-transparent text-base text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500 focus:outline-none px-2 py-1.5"
           />

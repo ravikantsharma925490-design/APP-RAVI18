@@ -78,6 +78,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     clearAllMessages,
     fetchMessages,
     markMessagesAsRead,
+    typingUserId,
+    sendTypingSignal,
   } = useMessages(conversation?.id || null, currentUser?.id, isChatVisible, conversation);
 
   // Scroll helpers
@@ -656,11 +658,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </div>
             )}
 
+            {typingUserId && (
+              <div className="px-4 pb-1 text-xs text-neutral-500 dark:text-neutral-400 italic animate-pulse">
+                {otherUser?.full_name || otherUser?.username || 'Someone'} is typing...
+              </div>
+            )}
+
             <ChatInput
               onSendMessage={handleSendMessage}
               displayName={displayName}
               disabled={!canChat || isBlocked}
               sending={sending}
+              onTyping={sendTypingSignal}
             />
           </div>
         )}
