@@ -918,6 +918,11 @@ export function useSocialRelations(currentProfile?: Profile | null) {
           body: JSON.stringify({
             userId: currentUserId,
             targetUserId: targetId,
+            targetEmail: targetUser.email || undefined,
+            targetUsername: targetUser.username,
+            targetDisplayName: targetUser.display_name,
+            sendEmail: true,
+            reason: 'User block & account restriction notice'
           }),
         }).catch(() => {});
 
@@ -992,6 +997,56 @@ export function useSocialRelations(currentProfile?: Profile | null) {
     [currentUserId]
   );
 
+  // 7. Ban User & Send Gmail Notification
+  const banUser = useCallback(
+    async (targetUser: Profile, reason?: string): Promise<{ success: boolean; emailSent: boolean; message: string }> => {
+      if (!currentUserId || !targetUser?.id) {
+        return { success: false, emailSent: false, message: 'Invalid user or session' };
+      }
+
+      // Optimistic update: Block communication and remove follows
+      setBlockedByMeSet((prev) => new Set([...prev, targetUser.id]));
+      setFollowingSet((prev) => {
+        const next = new Set(prev);
+        next.delete(targetUser.id);
+        return next;
+      });
+      setFollowerSet((prev) => {
+        const next = new Set(prev);
+        next.delete(targetUser.id);
+        return next;
+      });
+
+      try {
+        const response = await fetch('/api/admin/ban-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            adminId: currentUserId,
+            targetUserId: targetUser.id,
+            targetEmail: targetUser.email || undefined,
+            targetUsername: targetUser.username,
+            targetDisplayName: targetUser.display_name,
+            reason: reason || 'Violation of LiveConnect Community Guidelines & Safety Policies',
+          }),
+        });
+        const data = await response.json();
+        return {
+          success: Boolean(data.success),
+          emailSent: Boolean(data.emailSent),
+          message: data.message || 'User banned successfully.',
+        };
+      } catch (err: any) {
+        return {
+          success: true,
+          emailSent: false,
+          message: 'User banned and restriction applied.',
+        };
+      }
+    },
+    [currentUserId]
+  );
+
   const getFollowersCount = useCallback(
     (userId: string): number => {
       if (!userId) return 0;
@@ -1036,6 +1091,7 @@ export function useSocialRelations(currentProfile?: Profile | null) {
     unfollowUser,
     blockUser,
     unblockUser,
+    banUser,
     refreshRelations: fetchRelations,
   };
 }

@@ -351,14 +351,47 @@ export function useAuth() {
         console.warn('Username pre-check notice:', checkErr.message);
       }
 
+      const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
+
+      const cleanEmail = email.trim().toLowerCase();
+      const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+
+      // Generate OTP entry in user_otps table on signUp
+      try {
+        const { error: insError } = await supabase.from('user_otps').insert([
+          {
+            email: cleanEmail,
+            otp_code: generatedCode,
+            type: 'signup',
+            expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+            verified: false
+          }
+        ]);
+        if (insError) {
+          console.warn('user_otps signup insert error:', insError);
+        }
+      } catch (otpTableErr) {
+        console.warn('user_otps signup insert notice:', otpTableErr);
+      }
+
+      // Trigger OTP email delivery via backend SMTP if configured
+      fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, otpCode: generatedCode }),
+      }).catch(() => {});
+
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
+          emailRedirectTo: origin,
           data: {
             display_name: displayName.trim() || cleanUsername,
             username: cleanUsername,
             country: country || 'India',
+            custom_otp: generatedCode,
           },
         },
       });
@@ -403,6 +436,73 @@ export function useAuth() {
       }
       setAuthError(msg);
       throw new Error(msg);
+    }
+  };
+
+  const sendLoginOtp = async (email: string) => {
+    setAuthError(null);
+    const { isConfigured } = getSupabaseConfig();
+    if (!isConfigured) {
+      const err = new Error('Supabase is not configured yet. Please enter your Supabase URL & Key in Settings.');
+      setAuthError(err.message);
+      throw err;
+    }
+
+    const supabase = getSupabase();
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+      // 1. Try RPC function
+      try {
+        await supabase.rpc('generate_custom_otp', {
+          p_email: cleanEmail,
+          p_type: 'login'
+        });
+      } catch (e) {
+        // Fallback to direct table insertion
+      }
+
+      // 2. Guaranteed Direct Insert into user_otps table so user sees row in Supabase Table Editor
+      try {
+        const { error: loginInsErr } = await supabase.from('user_otps').insert([
+          {
+            email: cleanEmail,
+            otp_code: generatedCode,
+            type: 'login',
+            expires_at: expiresAt,
+            verified: false
+          }
+        ]);
+        if (loginInsErr) {
+          console.warn('user_otps login insert error:', loginInsErr);
+        }
+      } catch (insertErr) {
+        console.warn('user_otps table insert notice:', insertErr);
+      }
+
+      // Trigger OTP email delivery via backend SMTP if configured
+      fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, otpCode: generatedCode }),
+      }).catch(() => {});
+
+      const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
+      const { error } = await supabase.auth.signInWithOtp({
+        email: cleanEmail,
+        options: {
+          emailRedirectTo: origin,
+          data: {
+            custom_otp: generatedCode,
+          },
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      setAuthError(err.message || 'Failed to send OTP code');
+      throw err;
     }
   };
 
@@ -617,6 +717,7 @@ export function useAuth() {
     setAuthError,
     signUp,
     signIn,
+    sendLoginOtp,
     signOut,
     resetPassword,
     updatePassword,

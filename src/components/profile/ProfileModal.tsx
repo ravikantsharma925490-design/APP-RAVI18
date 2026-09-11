@@ -20,6 +20,7 @@ import {
   Users,
   UserCheck,
   UserPlus,
+  Mail,
 } from 'lucide-react';
 import { Profile, UserRelationStatus } from '@/src/types';
 import { cn, getAvatarColor, getInitials, formatJoinedYear } from '@/src/lib/utils';
@@ -723,24 +724,31 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               {/* Block / Unblock Management */}
               <div className="pt-2 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
                 {showBlockConfirm ? (
-                  <div className="w-full p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 space-y-2">
-                    <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
-                      Block @{targetUser.username}? This will prevent any messaging or calling between you.
+                  <div className="w-full p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 space-y-2.5">
+                    <p className="text-xs text-rose-600 dark:text-rose-400 font-medium leading-relaxed">
+                      Block & Ban <strong>@{targetUser.username}</strong>? This will restrict their communication and send an <strong>official Ban Notice email to their Gmail inbox</strong>.
                     </p>
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => setShowBlockConfirm(false)}
-                        className="px-3 py-1 text-xs rounded-xl bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleBlockToggle}
-                        disabled={actionLoading}
-                        className="px-3 py-1 text-xs rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700"
-                      >
-                        Confirm Block
-                      </button>
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[11px] text-neutral-400 flex items-center gap-1">
+                        <Mail className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Gmail Notice Enabled</span>
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowBlockConfirm(false)}
+                          className="px-3 py-1.5 text-xs rounded-xl bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 font-medium"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleBlockToggle}
+                          disabled={actionLoading}
+                          className="px-3.5 py-1.5 text-xs rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          {actionLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                          <span>Ban & Send Email</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import logoImage from './assets/logo.png';
 import { useAuth } from '@/src/hooks/useAuth';
 import { usePresence } from '@/src/hooks/usePresence';
 import { useConversations } from '@/src/hooks/useConversations';
@@ -39,6 +40,7 @@ export default function App() {
     setAuthError,
     signUp,
     signIn,
+    sendLoginOtp,
     signOut,
     resetPassword,
     updatePassword,
@@ -185,12 +187,78 @@ export default function App() {
     }
   };
 
-  // Loading initial auth
-  if (authLoading) {
+  // Splash screen state: runs strictly for full 3.8 seconds on launch
+  const [minSplashDone, setMinSplashDone] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMinSplashDone(true);
+    }, 3800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Loading initial auth or playing full splash screen
+  if (!minSplashDone || authLoading) {
     return (
-      <div className="min-h-screen-safe w-full flex flex-col items-center justify-center bg-neutral-950 text-white">
-        <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-sm font-semibold text-neutral-400">Loading LiveConnect...</p>
+      <div 
+        className="min-h-screen-safe w-full flex items-center justify-center bg-black relative overflow-hidden select-none"
+      >
+        <style>{`
+          @keyframes splashGlow {
+            0% { opacity: 0; transform: scale(0.6); filter: blur(20px); }
+            50% { opacity: 0.9; filter: blur(10px); }
+            100% { opacity: 0.6; transform: scale(1.4); filter: blur(30px); }
+          }
+          @keyframes splashLogoIn {
+            0% { opacity: 0; transform: scale(0.6) translateY(10px); }
+            60% { opacity: 1; transform: scale(1.1) translateY(0); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+          }
+          @keyframes splashPulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+          }
+          @keyframes splashRingPulse {
+            0% { transform: scale(0.9); opacity: 0.7; }
+            100% { transform: scale(1.6); opacity: 0; }
+          }
+          .splash-glow {
+            animation: splashGlow 2.2s ease-out infinite alternate;
+          }
+          .splash-logo {
+            animation: splashLogoIn 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+          }
+          .splash-ring {
+            animation: splashRingPulse 1.8s ease-out infinite;
+          }
+          .splash-tagline {
+            animation: splashPulse 1.6s ease-in-out infinite;
+            animation-delay: 0.8s;
+            opacity: 0;
+            animation-fill-mode: forwards;
+          }
+        `}</style>
+
+        <div
+          className="splash-glow absolute w-80 h-80 rounded-full"
+          style={{
+            background: 'radial-gradient(circle, rgba(79,70,229,0.55) 0%, rgba(124,58,237,0.4) 35%, rgba(251,113,133,0.25) 60%, transparent 75%)',
+          }}
+        />
+
+        <div className="relative flex flex-col items-center">
+          <div className="relative flex items-center justify-center">
+            <div className="splash-ring absolute w-36 h-36 rounded-full border-2 border-purple-400" />
+            <img
+              src={logoImage}
+              alt="LiveConnect"
+              className="splash-logo relative w-28 h-28 object-contain drop-shadow-[0_0_30px_rgba(147,51,234,0.6)]"
+            />
+          </div>
+          <p className="splash-tagline text-xs font-semibold text-neutral-500 tracking-[0.3em] uppercase mt-5">
+            Connecting you now
+          </p>
+        </div>
       </div>
     );
   }
@@ -315,6 +383,7 @@ export default function App() {
         <AuthPage
           onSignIn={signIn}
           onSignUp={signUp}
+          onSendLoginOtp={sendLoginOtp}
           onResetPassword={resetPassword}
           onStartPasswordRecovery={() => setIsPasswordRecovery(true)}
           authError={authError}

@@ -78,47 +78,57 @@ export const LegalModal: React.FC<LegalModalProps> = ({
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-blue-500" />
-                  1. Acceptance of Terms
+                  1. Acceptance of Terms & Account Registration
                 </h3>
                 <p>
-                  By creating an account or logging in to LiveConnect, you agree to comply with and be bound by these Terms of Use. If you do not agree to these terms, you may not use our services.
+                  By creating an account or logging in to LiveConnect, you agree to comply with and be bound by these Terms of Use and Privacy Policy. Account registration requires a valid email address, display name, unique username handle, and country selection.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <Lock className="w-4 h-4 text-blue-500" />
-                  2. User Accounts & Handles
+                  2. User Accounts, Handles & Password Recovery
                 </h3>
                 <p>
-                  You are responsible for maintaining the confidentiality of your login credentials and unique username handle. Usernames must not infringe upon the intellectual property or trademarks of others.
+                  You are responsible for maintaining the confidentiality of your login credentials and unique username handle. Password resets are handled securely via single-use Email Reset Links sent directly to your verified inbox.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-blue-500" />
-                  3. Community Standards & Calling Safety
+                  3. OTP Verification & 5-Minute Expiration
                 </h3>
                 <p>
-                  LiveConnect enforces a strict mutual-follow communication model. You agree not to use voice/video calls or instant messages for harassment, spam, fraudulent activities, or illegal behavior. Users violating safety guidelines are subject to immediate account restriction.
+                  Sign-up verification codes (OTPs) generated for account creation remain valid for exactly 5 minutes (300 seconds). Requesting a new code automatically generates a fresh token to protect your account.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-blue-500" />
+                  4. Community Standards & Communication Safety
+                </h3>
+                <p>
+                  LiveConnect enforces a mutual-follow communication model. You agree not to use voice/video calls or instant messages for harassment, spam, fraudulent activities, or illegal behavior. Users violating safety guidelines are subject to immediate account restriction.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-blue-500" />
-                  4. Free &amp; Unlimited 1-to-1 Calling
+                  5. Free &amp; Unlimited Real-Time Features
                 </h3>
                 <p>
-                  All voice and video calling as well as real-time messaging on LiveConnect is 100% free and unlimited. No subscriptions, ads, or paid plans are required.
+                  All voice and video calling, real-time messaging, and online status features on LiveConnect are 100% free and unlimited. No paid subscriptions, hidden fees, or advertisements are required.
                 </p>
               </div>
             </>
           ) : (
             <>
               <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-medium">
-                🔒 <strong>Our Strict Privacy Pledge:</strong> Your information is only used to create and authenticate your account. We never sell, leak, or share user personal data with third parties.
+                🔒 <strong>Our Strict Privacy Pledge:</strong> Your information is used exclusively for account authentication and delivering real-time communication. We never sell, lease, or share personal user data with third parties.
               </div>
 
               <div className="space-y-2">
@@ -127,27 +137,37 @@ export const LegalModal: React.FC<LegalModalProps> = ({
                   1. Information We Collect
                 </h3>
                 <p>
-                  We collect only necessary account data: your email address, chosen username handle, display name, and avatar. No sensitive financial information is stored on our servers.
+                  We collect essential account details: your email address, chosen display name, unique username handle (@username), avatar/profile picture, selected country, and account creation timestamp.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <Lock className="w-4 h-4 text-emerald-500" />
-                  2. Audio & Video Call Confidentiality
+                  2. Audio, Video & Message Encryption
                 </h3>
                 <p>
-                  Voice and video calls use peer-to-peer encrypted WebRTC media connections. We do not record, store, or monitor your private voice or video conversations.
+                  Voice and video calls use peer-to-peer encrypted WebRTC media connections. We do not record, store, or monitor your private voice/video conversations or direct messages.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                  3. Data Protection & Deletion
+                  3. Secure Authentication & Password Recovery
                 </h3>
                 <p>
-                  You have full ownership of your data. You can delete your messages, clear chat history, or update your profile at any time with instantaneous effect.
+                  Authentication data, hashed passwords, and temporary 5-minute verification tokens are stored securely with row-level security (RLS). Password resets are authorized exclusively via direct single-use email links.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                  4. Data Ownership & Instant Deletion
+                </h3>
+                <p>
+                  You retain full control over your personal data. You may edit your profile, clear chat histories, or delete your account at any time with immediate effect across all servers.
                 </p>
               </div>
             </>

@@ -6,8 +6,149 @@ import { createClient } from '@supabase/supabase-js';
 import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
 import { spawn } from 'child_process';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
+
+// Helper: Send Ban Email Notification to User's Gmail
+async function sendBanNotificationEmail(toEmail: string, username: string, displayName: string, reason?: string) {
+  if (!toEmail || !toEmail.includes('@')) {
+    console.warn('[Ban Email] Skip sending: Invalid email', toEmail);
+    return false;
+  }
+
+  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const user = process.env.SMTP_USER || process.env.GMAIL_USER;
+  const pass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
+
+  let transporter;
+  if (user && pass) {
+    transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+    });
+  } else {
+    transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: user || 'support@liveconnect.app',
+        pass: pass || 'placeholder_pass',
+      },
+      tls: { rejectUnauthorized: false }
+    });
+  }
+
+  const htmlContent = `
+<div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; background-color: #0a0a0a; border-radius: 16px; color: #ffffff; border: 1px solid #262626;">
+  <div style="text-align: center; margin-bottom: 24px;">
+    <h2 style="color: #ef4444; font-size: 24px; margin: 0; font-weight: 800; letter-spacing: 0.5px;">LiveConnect Account Notice</h2>
+    <p style="color: #a3a3a3; font-size: 14px; margin-top: 6px;">Important security & account status notification</p>
+  </div>
+
+  <div style="background-color: #171717; border: 1px solid #262626; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+    <p style="color: #ffffff; font-size: 16px; margin: 0 0 12px 0;">
+      Hello <strong>${displayName || username}</strong> (@${username}),
+    </p>
+    <p style="color: #d4d4d4; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
+      Your LiveConnect account (<strong>${toEmail}</strong> / @${username}) has been <span style="color: #ef4444; font-weight: bold;">banned / suspended</span>.
+    </p>
+    
+    ${
+      reason
+        ? `<div style="background-color: #262626; border-left: 4px solid #ef4444; padding: 14px 16px; border-radius: 8px; margin-bottom: 16px;">
+            <p style="color: #a3a3a3; font-size: 11px; margin: 0 0 4px 0; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Reason for Ban:</p>
+            <p style="color: #f87171; font-size: 14px; margin: 0; font-weight: 600;">${reason}</p>
+          </div>`
+        : ''
+    }
+
+    <div style="background-color: #0d0d0d; border: 1px solid #262626; border-radius: 8px; padding: 14px; margin-bottom: 8px;">
+      <p style="color: #a3a3a3; font-size: 12px; margin: 0 0 6px 0; font-weight: bold; text-transform: uppercase;">Restricted Account Access:</p>
+      <ul style="color: #d4d4d4; font-size: 13px; margin: 0; padding-left: 20px; line-height: 1.6;">
+        <li>Sending direct chat messages & voice notes</li>
+        <li>Initiating audio and video calls</li>
+        <li>Joining or hosting Live Rooms</li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="text-align: center; border-top: 1px solid #262626; padding-top: 20px;">
+    <p style="color: #737373; font-size: 12px; margin: 0 0 10px 0;">
+      If you believe this ban was applied in error or wish to appeal, please contact support.
+    </p>
+    <a href="mailto:support@liveconnect.app" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: bold; display: inline-block;">
+      Contact Support Team
+    </a>
+  </div>
+</div>
+  `;
+
+  try {
+    const info = await transporter.sendMail({
+      from: '"LiveConnect Security" <security@liveconnect.app>',
+      to: toEmail,
+      subject: `⚠️ Account Banned Notice: LiveConnect (@${username})`,
+      html: htmlContent,
+    });
+    console.log(`[Ban Email] Successfully sent notification to ${toEmail}. Message ID:`, info.messageId);
+    return true;
+  } catch (err: any) {
+    console.warn(`[Ban Email] Email send result for ${toEmail}:`, err.message || err);
+    return false;
+  }
+}
+
+// Helper: Send OTP Verification Email via SMTP
+async function sendOtpEmail(toEmail: string, otpCode: string) {
+  if (!toEmail || !toEmail.includes('@')) return false;
+
+  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const user = process.env.SMTP_USER || process.env.GMAIL_USER;
+  const pass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
+
+  if (!user || !pass) return false;
+
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
+
+  const htmlContent = `
+<div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 28px 20px; background-color: #0a0a0a; border-radius: 16px; color: #ffffff; border: 1px solid #262626;">
+  <div style="text-align: center; margin-bottom: 20px;">
+    <h2 style="color: #3b82f6; font-size: 22px; margin: 0; font-weight: 800;">LiveConnect Verification</h2>
+    <p style="color: #a3a3a3; font-size: 13px; margin-top: 4px;">Your 5-minute login verification code</p>
+  </div>
+  <div style="background-color: #171717; border: 1px solid #262626; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
+    <p style="color: #a3a3a3; font-size: 12px; margin: 0 0 10px 0; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Your Verification Code</p>
+    <div style="font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #60a5fa; padding: 10px 0;">${otpCode}</div>
+    <p style="color: #737373; font-size: 12px; margin: 10px 0 0 0;">This code is valid for <strong>5 minutes</strong>. Do not share it with anyone.</p>
+  </div>
+</div>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: `"LiveConnect Auth" <${user}>`,
+      to: toEmail,
+      subject: `🔑 LiveConnect Verification Code: ${otpCode}`,
+      html: htmlContent,
+    });
+    console.log(`[OTP Email] Successfully sent OTP ${otpCode} to ${toEmail}`);
+    return true;
+  } catch (err: any) {
+    console.warn(`[OTP Email] Error sending to ${toEmail}:`, err.message || err);
+    return false;
+  }
+}
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -1108,9 +1249,9 @@ app.post('/api/relations/unfollow', async (req, res) => {
 });
 
 // 4. Block a user
-app.post('/api/relations/block', (req, res) => {
+app.post('/api/relations/block', async (req, res) => {
   try {
-    const { userId, targetUserId } = req.body;
+    const { userId, targetUserId, targetEmail, targetUsername, targetDisplayName, reason, sendEmail } = req.body;
     if (!userId || !targetUserId) {
       return res.status(400).json({ error: 'userId and targetUserId are required' });
     }
@@ -1123,6 +1264,41 @@ app.post('/api/relations/block', (req, res) => {
     // Immediately remove follow relationships in both directions
     followsStore.delete(`${userId}:${targetUserId}`);
     followsStore.delete(`${targetUserId}:${userId}`);
+
+    // Optionally send email notification if requested or email provided
+    if (sendEmail || targetEmail) {
+      let emailToSend = targetEmail;
+      let usernameToSend = targetUsername || 'user';
+      let displayNameToSend = targetDisplayName || 'User';
+
+      if (serverSupabase && targetUserId && !emailToSend) {
+        try {
+          const { data: p } = await serverSupabase
+            .from('profiles')
+            .select('email, username, display_name')
+            .eq('id', targetUserId)
+            .maybeSingle();
+
+          if (p?.email) {
+            sendBanNotificationEmail(
+              p.email,
+              p.username || usernameToSend,
+              p.display_name || displayNameToSend,
+              reason || 'Account Restriction / Block Notice'
+            );
+          }
+        } catch (e) {
+          // Handled
+        }
+      } else if (emailToSend) {
+        sendBanNotificationEmail(
+          emailToSend,
+          usernameToSend,
+          displayNameToSend,
+          reason || 'Account Restriction / Block Notice'
+        );
+      }
+    }
 
     const counts = getFollowCounts(targetUserId);
 
@@ -1138,6 +1314,85 @@ app.post('/api/relations/block', (req, res) => {
     });
   } catch (error: any) {
     return res.status(500).json({ error: 'Failed to block user' });
+  }
+});
+
+// 4b. Ban a user & send Gmail notification
+app.post('/api/admin/ban-user', async (req, res) => {
+  try {
+    const { adminId, targetUserId, targetEmail, targetUsername, targetDisplayName, reason } = req.body;
+    
+    if (!targetUserId && !targetEmail) {
+      return res.status(400).json({ error: 'targetUserId or targetEmail is required' });
+    }
+
+    let emailToSend = targetEmail;
+    let usernameToSend = targetUsername || 'user';
+    let displayNameToSend = targetDisplayName || 'User';
+
+    // Query profile from Supabase if email/details not fully provided
+    if (serverSupabase && targetUserId && (!emailToSend || !targetUsername)) {
+      try {
+        const { data: profile } = await serverSupabase
+          .from('profiles')
+          .select('email, username, display_name')
+          .eq('id', targetUserId)
+          .maybeSingle();
+
+        if (profile) {
+          if (profile.email) emailToSend = profile.email;
+          if (profile.username) usernameToSend = profile.username;
+          if (profile.display_name) displayNameToSend = profile.display_name;
+        }
+      } catch (err) {
+        console.warn('Profile fetch error during ban:', err);
+      }
+    }
+
+    // Add to in-memory blocked store if adminId provided
+    if (adminId && targetUserId) {
+      blockedStore.add(`${adminId}:${targetUserId}`);
+    }
+
+    // Trigger Email Notification to Banned User's Gmail!
+    let emailSent = false;
+    if (emailToSend) {
+      emailSent = await sendBanNotificationEmail(
+        emailToSend,
+        usernameToSend,
+        displayNameToSend,
+        reason || 'Violation of LiveConnect Community Guidelines & Safety Policies'
+      );
+    } else {
+      console.warn('[Ban User] No email address found to send ban notification');
+    }
+
+    return res.json({
+      success: true,
+      bannedUserId: targetUserId || null,
+      targetEmail: emailToSend || null,
+      emailSent,
+      message: emailSent
+        ? `User @${usernameToSend} has been banned and notification email was sent to ${emailToSend}.`
+        : `User @${usernameToSend} has been banned.`,
+    });
+  } catch (error: any) {
+    console.error('Ban user error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to ban user' });
+  }
+});
+
+// 4c. Send OTP Email Endpoint
+app.post('/api/auth/send-otp', async (req, res) => {
+  try {
+    const { email, otpCode } = req.body;
+    if (!email || !otpCode) {
+      return res.status(400).json({ error: 'email and otpCode are required' });
+    }
+    const emailSent = await sendOtpEmail(email.trim().toLowerCase(), String(otpCode));
+    return res.json({ success: true, emailSent });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to send OTP email' });
   }
 });
 

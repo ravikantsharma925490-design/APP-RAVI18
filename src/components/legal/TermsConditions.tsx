@@ -31,7 +31,7 @@ export const TermsConditions: React.FC<TermsConditionsProps> = ({
   onOpenContactSupport,
 }) => {
   const [activeSectionId, setActiveSectionId] = useState<string>('introduction');
-  const lastUpdatedDate = 'August 17, 2026';
+  const lastUpdatedDate = 'September 11, 2026';
 
   const tableOfContents = [
     { id: 'introduction', label: '1. Introduction', icon: FileText },

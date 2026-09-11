@@ -51,6 +51,9 @@ export const MessagesTab: React.FC<MessagesTabProps> = ({
   const activePeerId = activeConversation?.other_member?.id;
   const activeRelationStatus = activePeerId && getRelationStatus ? getRelationStatus(activePeerId) : undefined;
 
+  // On mobile view (<768px), only hide list and show ChatWindow if an actual active conversation exists
+  const hasActiveChatOnMobile = Boolean(activeConversationId && activeConversation);
+
   const filteredConversations = conversations.filter((c) => {
     if (!searchQuery.trim()) return true;
     const name = c.other_member?.display_name || '';
@@ -115,7 +118,7 @@ export const MessagesTab: React.FC<MessagesTabProps> = ({
       {/* Conversation List Column */}
       <div
         className={`${
-          activeConversationId ? 'hidden md:flex' : 'flex'
+          hasActiveChatOnMobile ? 'hidden md:flex' : 'flex'
         } flex-col w-full md:w-80 lg:w-96 h-full bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 shrink-0`}
       >
         {/* Messages Header */}
@@ -186,7 +189,7 @@ export const MessagesTab: React.FC<MessagesTabProps> = ({
       {/* Active Conversation Chat Window */}
       <div
         className={`${
-          !activeConversationId ? 'hidden md:flex' : 'flex'
+          !hasActiveChatOnMobile ? 'hidden md:flex' : 'flex'
         } flex-1 h-full overflow-hidden`}
       >
         <ChatWindow

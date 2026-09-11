@@ -31,7 +31,7 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({
   onOpenContactSupport,
 }) => {
   const [activeSectionId, setActiveSectionId] = useState<string>('intro');
-  const lastUpdatedDate = 'August 17, 2026';
+  const lastUpdatedDate = 'September 11, 2026';
 
   const tableOfContents = [
     { id: 'introduction', label: '1. Introduction', icon: FileText },

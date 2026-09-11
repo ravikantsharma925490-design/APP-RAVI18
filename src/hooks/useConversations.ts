@@ -224,7 +224,9 @@ export function useConversations(currentUserId?: string, activeTab: string = 'me
   const [loading, setLoading] = useState<boolean>(() => loadLocalConversations(currentUserId).length === 0);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(() => {
     if (typeof window !== 'undefined' && currentUserId) {
-      return localStorage.getItem(`liveconnect_active_conv_${currentUserId}`) || null;
+      if (window.innerWidth >= 768) {
+        return localStorage.getItem(`liveconnect_active_conv_${currentUserId}`) || null;
+      }
     }
     return null;
   });

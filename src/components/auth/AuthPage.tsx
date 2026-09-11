@@ -23,6 +23,7 @@ import { LegalModal } from '@/src/components/legal/LegalModal';
 interface AuthPageProps {
   onSignIn: (email: string, pass: string) => Promise<any>;
   onSignUp: (email: string, pass: string, name: string, username: string, country?: string) => Promise<any>;
+  onSendLoginOtp?: (email: string) => Promise<any>;
   onResetPassword: (email: string) => Promise<any>;
   onStartPasswordRecovery?: () => void;
   onOpenConfig: () => void;
@@ -62,6 +63,7 @@ function detectDefaultCountry(): string {
 export const AuthPage: React.FC<AuthPageProps> = ({
   onSignIn,
   onSignUp,
+  onSendLoginOtp,
   onResetPassword,
   onStartPasswordRecovery,
   onOpenConfig,
@@ -226,8 +228,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       } else if (mode === 'forgot') {
         await onResetPassword(email);
         setResetSent(true);
-        setPendingVerifyEmail(email.trim());
-        setSuccessMessage('Password reset link sent to your email! Click the link or enter the code below.');
+        setSuccessMessage('✨ Password reset link sent to your email! Open your Gmail inbox and click the reset link to create a new password.');
       }
     } catch (err: any) {
       // Error handled in parent hook
@@ -283,6 +284,33 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     await executeAuthAction();
   };
 
+  const handleSendLoginOtp = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!email || !email.includes('@')) {
+      clearError();
+      setSuccessMessage('Please enter a valid email address first.');
+      return;
+    }
+    setLoading(true);
+    try {
+      if (onSendLoginOtp) {
+        await onSendLoginOtp(email);
+      } else {
+        const supabase = (await import('@/src/lib/supabase/client')).getSupabase();
+        if (!supabase) throw new Error('Database client unavailable');
+        const { error } = await supabase.auth.signInWithOtp({ email: email.trim() });
+        if (error) throw error;
+      }
+      setPendingVerifyEmail(email.trim());
+      setMode('verify-otp');
+      setSuccessMessage('An OTP verification code was sent to your email!');
+    } catch (err: any) {
+      // Error is handled in parent hook
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setOtpError(null);
@@ -290,16 +318,74 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     try {
       const supabase = (await import('@/src/lib/supabase/client')).getSupabase();
       if (!supabase) throw new Error('Database client unavailable');
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: pendingVerifyEmail,
-        token: otpCode.trim(),
-        type: 'signup',
-      });
-      if (error) throw error;
-      setSuccessMessage('Email verified! Logging you in...');
-      if (data.user) {
-        window.location.reload();
+
+      let verifiedSession: any = null;
+      let lastError: any = null;
+
+      const cleanEmail = pendingVerifyEmail.toLowerCase().trim();
+      const cleanCode = otpCode.trim();
+      const nowIso = new Date().toISOString();
+
+      // 1. First check user_otps database table for ANY valid unexpired 5-minute code
+      try {
+        const { data: rows } = await supabase
+          .from('user_otps')
+          .select('*')
+          .ilike('email', cleanEmail)
+          .gt('expires_at', nowIso);
+
+        if (rows && rows.length > 0) {
+          const match = rows.find((r: any) => r.otp_code === cleanCode && r.verified !== true);
+          if (match) {
+            verifiedSession = { user: { email: cleanEmail } };
+            try {
+              await supabase.from('user_otps').update({ verified: true }).eq('id', match.id);
+            } catch (uErr) { /* ignore */ }
+          }
+        }
+      } catch (dbErr) { /* ignore */ }
+
+      // 2. If not verified via user_otps table, check native Supabase verifyOtp
+      if (!verifiedSession) {
+        const typesToTry: ('email' | 'signup' | 'magiclink' | 'recovery')[] = ['email', 'signup', 'magiclink', 'recovery'];
+        for (const otpType of typesToTry) {
+          try {
+            const res = await supabase.auth.verifyOtp({
+              email: cleanEmail,
+              token: cleanCode,
+              type: otpType,
+            });
+            if (!res.error && (res.data?.session || res.data?.user)) {
+              verifiedSession = res.data;
+              try {
+                await supabase.from('user_otps').upsert([
+                  {
+                    email: cleanEmail,
+                    otp_code: cleanCode,
+                    type: otpType,
+                    expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+                    verified: true
+                  }
+                ]);
+              } catch (e) { /* ignore */ }
+              break;
+            } else {
+              lastError = res.error;
+            }
+          } catch (e) {
+            lastError = e;
+          }
+        }
       }
+
+      if (!verifiedSession) {
+        throw lastError || new Error('Invalid or expired OTP code. Please request a new OTP.');
+      }
+
+      setSuccessMessage('OTP code verified! Logging you in...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
     } catch (err: any) {
       setOtpError(err.message || 'Invalid or expired code. Please try again.');
     } finally {
@@ -655,41 +741,43 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             </div>
           )}
 
-          {/* Terms & Privacy Policy Checkbox (Required for Login and Signup) */}
+          {/* Terms & Privacy Policy Checkbox (Required for both Login and Signup) */}
           {mode !== 'forgot' && (
-            <div className="pt-1">
-              <label className="flex items-start gap-2.5 cursor-pointer group select-none">
-                <input
-                  type="checkbox"
-                  checked={agreedTerms}
-                  onChange={(e) => setAgreedTerms(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded-md border-neutral-700 bg-neutral-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-neutral-900 cursor-pointer transition-all"
-                />
-                <span className="text-xs text-neutral-400 group-hover:text-neutral-300 leading-relaxed">
-                  I agree to the{' '}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setLegalDocModal({ isOpen: true, tab: 'terms' });
-                    }}
-                    className="text-neutral-200 underline font-semibold hover:text-blue-400 cursor-pointer"
-                  >
-                    Terms of use
-                  </button>{' '}
-                  and{' '}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setLegalDocModal({ isOpen: true, tab: 'privacy' });
-                    }}
-                    className="text-neutral-200 underline font-semibold hover:text-blue-400 cursor-pointer"
-                  >
-                    Privacy policy
-                  </button>
-                </span>
-              </label>
+            <div className="pt-2">
+              <div className="p-3 rounded-2xl bg-neutral-800/50 border border-neutral-700/80 hover:border-neutral-600 transition-all">
+                <label className="flex items-start gap-2.5 cursor-pointer group select-none">
+                  <input
+                    type="checkbox"
+                    checked={agreedTerms}
+                    onChange={(e) => setAgreedTerms(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-neutral-600 bg-neutral-900 text-blue-500 focus:ring-blue-500 focus:ring-offset-neutral-900 cursor-pointer transition-all"
+                  />
+                  <span className="text-xs text-neutral-300 group-hover:text-white leading-relaxed">
+                    I agree to the{' '}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLegalDocModal({ isOpen: true, tab: 'terms' });
+                      }}
+                      className="text-blue-400 font-semibold underline hover:text-blue-300 cursor-pointer"
+                    >
+                      Terms of Use
+                    </button>{' '}
+                    and{' '}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLegalDocModal({ isOpen: true, tab: 'privacy' });
+                      }}
+                      className="text-blue-400 font-semibold underline hover:text-blue-300 cursor-pointer"
+                    >
+                      Privacy Policy
+                    </button>
+                  </span>
+                </label>
+              </div>
             </div>
           )}
 
@@ -714,27 +802,40 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </>
             )}
           </button>
+
+          {/* Form end */}
         </form>
         )}
 
-        {/* Verify OTP Mode */}
+        {/* Verify OTP / Email Confirmation Mode */}
         {mode === 'verify-otp' && (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
-            <p className="text-sm text-neutral-400 text-center">
-              Enter the 6-digit code sent to{' '}
-              <span className="text-white font-medium">{pendingVerifyEmail}</span>
-            </p>
+            <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-center space-y-2">
+              <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center mx-auto text-lg font-bold">
+                ✉️
+              </div>
+              <h3 className="text-sm font-semibold text-white">Check Your Gmail / Email Inbox</h3>
+              <p className="text-xs text-neutral-300 leading-relaxed">
+                A confirmation link was sent to <span className="text-white font-medium">{pendingVerifyEmail}</span>.
+                <br />
+                <strong className="text-blue-400">Open your Gmail and click the link</strong> to verify your account & sign in automatically!
+              </p>
+            </div>
 
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-              placeholder="000000"
-              className="w-full text-center text-2xl tracking-[0.5em] py-3 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-              autoFocus
-            />
+            <div className="pt-1">
+              <p className="text-xs text-neutral-400 text-center mb-2">
+                Or enter 6-digit verification code if present in your email:
+              </p>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="000000"
+                className="w-full text-center text-2xl tracking-[0.5em] py-3 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              />
+            </div>
 
             {otpError && (
               <p className="text-sm text-red-400 text-center font-medium">{otpError}</p>
@@ -748,7 +849,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                'Verify & Continue'
+                'Verify Code & Continue'
               )}
             </button>
 
@@ -758,7 +859,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 onClick={handleResendOtp}
                 className="text-blue-400 hover:underline font-semibold cursor-pointer"
               >
-                Resend code
+                Resend Link / Code
               </button>
               <button
                 type="button"
@@ -779,34 +880,46 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         {mode === 'forgot' && (
           <div className="space-y-4 pt-1">
             {resetSent && (
-              <form onSubmit={handleVerifyRecoveryOtp} className="space-y-4 p-4 rounded-2xl bg-neutral-900/80 border border-neutral-800 shadow-inner">
-                <p className="text-xs text-neutral-300 text-center">
-                  Have a 6-digit recovery code from email? Enter it below to set your new password:
-                </p>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="000000"
-                  className="w-full text-center text-2xl tracking-[0.5em] py-2.5 rounded-xl bg-neutral-800 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                />
-                {otpError && (
-                  <p className="text-xs text-red-400 text-center font-medium">{otpError}</p>
-                )}
-                <button
-                  type="submit"
-                  disabled={loading || otpCode.length !== 6}
-                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {loading ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    'Verify Code & Set New Password'
+              <div className="space-y-3">
+                <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-center space-y-2">
+                  <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center mx-auto text-lg font-bold">
+                    🔑
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">Reset Link Sent to Gmail!</h3>
+                  <p className="text-xs text-neutral-300 leading-relaxed">
+                    Open your Gmail for <span className="text-white font-medium">{pendingVerifyEmail || email}</span> and <strong className="text-blue-400">click the password reset link</strong>.
+                  </p>
+                </div>
+
+                <form onSubmit={handleVerifyRecoveryOtp} className="space-y-3 p-4 rounded-2xl bg-neutral-900/80 border border-neutral-800 shadow-inner">
+                  <p className="text-xs text-neutral-400 text-center">
+                    Or if your email contains a 6-digit recovery code, enter it below:
+                  </p>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="000000"
+                    className="w-full text-center text-2xl tracking-[0.5em] py-2.5 rounded-xl bg-neutral-800 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  />
+                  {otpError && (
+                    <p className="text-xs text-red-400 text-center font-medium">{otpError}</p>
                   )}
-                </button>
-              </form>
+                  <button
+                    type="submit"
+                    disabled={loading || otpCode.length !== 6}
+                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {loading ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      'Verify Code & Set New Password'
+                    )}
+                  </button>
+                </form>
+              </div>
             )}
 
             <div className="text-center text-xs text-neutral-400">

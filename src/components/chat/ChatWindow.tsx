@@ -211,22 +211,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   if (!conversation) {
     return (
-      <div className="flex-1 flex flex-col h-full bg-white dark:bg-neutral-900">
-        {onBack && (
-          <div className="p-3 border-b border-neutral-200 dark:border-neutral-800 flex items-center gap-2 md:hidden">
-            <button
-              onClick={onBack}
-              className="p-2 rounded-xl text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
-              title="Back"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <span className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">Back to messages</span>
-          </div>
-        )}
-        <div className="flex-1 flex items-center justify-center">
-          <EmptyState type="no-conversation-selected" />
-        </div>
+      <div className="flex-1 flex flex-col h-full bg-white dark:bg-neutral-900 items-center justify-center">
+        <EmptyState type="no-conversation-selected" />
       </div>
     );
   }
