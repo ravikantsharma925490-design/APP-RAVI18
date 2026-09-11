@@ -24,6 +24,7 @@ interface AuthPageProps {
   onSignIn: (email: string, pass: string) => Promise<any>;
   onSignUp: (email: string, pass: string, name: string, username: string, country?: string) => Promise<any>;
   onResetPassword: (email: string) => Promise<any>;
+  onStartPasswordRecovery?: () => void;
   onOpenConfig: () => void;
   authError: string | null;
   clearError: () => void;
@@ -62,12 +63,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   onSignIn,
   onSignUp,
   onResetPassword,
+  onStartPasswordRecovery,
   onOpenConfig,
   authError,
   clearError,
 }) => {
   const { currentLanguage, openLanguageModal, t } = useLanguage();
-  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'verify-otp'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -82,6 +84,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // OTP Verification States
+  const [otpCode, setOtpCode] = useState('');
+  const [pendingVerifyEmail, setPendingVerifyEmail] = useState('');
+  const [otpError, setOtpError] = useState<string | null>(null);
 
   // Terms & Privacy Agreement State
   const [agreedTerms, setAgreedTerms] = useState(false);
@@ -213,17 +220,44 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         if (res?.session) {
           setSuccessMessage('Account created! Logging you in...');
         } else {
-          setSuccessMessage(
-            'Account created successfully! If email confirmation is enabled in your Supabase project, please verify your email inbox before signing in.'
-          );
+          setPendingVerifyEmail(email.trim());
+          setMode('verify-otp');
         }
       } else if (mode === 'forgot') {
         await onResetPassword(email);
         setResetSent(true);
-        setSuccessMessage('Password reset instructions sent to your email.');
+        setPendingVerifyEmail(email.trim());
+        setSuccessMessage('Password reset link sent to your email! Click the link or enter the code below.');
       }
     } catch (err: any) {
       // Error handled in parent hook
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyRecoveryOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOtpError(null);
+    setLoading(true);
+    try {
+      const supabase = (await import('@/src/lib/supabase/client')).getSupabase();
+      if (!supabase) throw new Error('Database client unavailable');
+      const targetEmail = pendingVerifyEmail || email;
+      const { error } = await supabase.auth.verifyOtp({
+        email: targetEmail.trim(),
+        token: otpCode.trim(),
+        type: 'recovery',
+      });
+      if (error) throw error;
+      setSuccessMessage('Recovery code verified! Set your new password.');
+      if (onStartPasswordRecovery) {
+        onStartPasswordRecovery();
+      } else {
+        window.location.reload();
+      }
+    } catch (err: any) {
+      setOtpError(err.message || 'Invalid or expired recovery code.');
     } finally {
       setLoading(false);
     }
@@ -247,6 +281,46 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     setAgreedTerms(true);
     setShowTermsModal(false);
     await executeAuthAction();
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOtpError(null);
+    setLoading(true);
+    try {
+      const supabase = (await import('@/src/lib/supabase/client')).getSupabase();
+      if (!supabase) throw new Error('Database client unavailable');
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: pendingVerifyEmail,
+        token: otpCode.trim(),
+        type: 'signup',
+      });
+      if (error) throw error;
+      setSuccessMessage('Email verified! Logging you in...');
+      if (data.user) {
+        window.location.reload();
+      }
+    } catch (err: any) {
+      setOtpError(err.message || 'Invalid or expired code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setOtpError(null);
+    try {
+      const supabase = (await import('@/src/lib/supabase/client')).getSupabase();
+      if (!supabase) throw new Error('Database client unavailable');
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: pendingVerifyEmail,
+      });
+      if (error) throw error;
+      setSuccessMessage('A new code has been sent to your email.');
+    } catch (err: any) {
+      setOtpError(err.message || 'Could not resend code.');
+    }
   };
 
   return (
@@ -282,11 +356,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             {mode === 'login' && t('auth.welcomeBack', 'Welcome back to LiveConnect')}
             {mode === 'signup' && t('auth.createAccount', 'Create your LiveConnect account')}
             {mode === 'forgot' && t('auth.forgotPassword', 'Reset your account password')}
+            {mode === 'verify-otp' && 'Verify your email'}
           </p>
         </div>
 
         {/* Tab Switcher */}
-        {mode !== 'forgot' && (
+        {mode !== 'forgot' && mode !== 'verify-otp' && (
           <div className="grid grid-cols-2 p-1 rounded-xl bg-neutral-800/80 border border-neutral-700/60 text-xs font-semibold">
             <button
               type="button"
@@ -345,7 +420,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {mode !== 'verify-otp' && (
+          <form onSubmit={handleSubmit} className="space-y-4">
           {mode === 'signup' && (
             <>
               {/* Full Display Name */}
@@ -639,19 +715,114 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             )}
           </button>
         </form>
+        )}
 
-        {/* Forgot Password back link */}
-        {mode === 'forgot' && (
-          <div className="text-center text-xs text-neutral-400 pt-2">
+        {/* Verify OTP Mode */}
+        {mode === 'verify-otp' && (
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <p className="text-sm text-neutral-400 text-center">
+              Enter the 6-digit code sent to{' '}
+              <span className="text-white font-medium">{pendingVerifyEmail}</span>
+            </p>
+
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+              placeholder="000000"
+              className="w-full text-center text-2xl tracking-[0.5em] py-3 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              autoFocus
+            />
+
+            {otpError && (
+              <p className="text-sm text-red-400 text-center font-medium">{otpError}</p>
+            )}
+
             <button
-              onClick={() => {
-                setMode('login');
-                clearError();
-              }}
-              className="font-semibold text-blue-400 hover:underline cursor-pointer"
+              type="submit"
+              disabled={loading || otpCode.length !== 6}
+              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold text-sm shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
             >
-              Back to sign in
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                'Verify & Continue'
+              )}
             </button>
+
+            <div className="flex items-center justify-between text-xs pt-1">
+              <button
+                type="button"
+                onClick={handleResendOtp}
+                className="text-blue-400 hover:underline font-semibold cursor-pointer"
+              >
+                Resend code
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('signup');
+                  clearError();
+                  setOtpError(null);
+                }}
+                className="text-neutral-400 hover:text-neutral-200 cursor-pointer"
+              >
+                Back to signup
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Forgot Password options */}
+        {mode === 'forgot' && (
+          <div className="space-y-4 pt-1">
+            {resetSent && (
+              <form onSubmit={handleVerifyRecoveryOtp} className="space-y-4 p-4 rounded-2xl bg-neutral-900/80 border border-neutral-800 shadow-inner">
+                <p className="text-xs text-neutral-300 text-center">
+                  Have a 6-digit recovery code from email? Enter it below to set your new password:
+                </p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="000000"
+                  className="w-full text-center text-2xl tracking-[0.5em] py-2.5 rounded-xl bg-neutral-800 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                />
+                {otpError && (
+                  <p className="text-xs text-red-400 text-center font-medium">{otpError}</p>
+                )}
+                <button
+                  type="submit"
+                  disabled={loading || otpCode.length !== 6}
+                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {loading ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    'Verify Code & Set New Password'
+                  )}
+                </button>
+              </form>
+            )}
+
+            <div className="text-center text-xs text-neutral-400">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('login');
+                  clearError();
+                  setResetSent(false);
+                  setOtpCode('');
+                }}
+                className="font-semibold text-blue-400 hover:underline cursor-pointer"
+              >
+                Back to sign in
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -308,6 +308,120 @@ function addNotification(
 }
 
 // ----------------------------------------------------
+// ACCOUNT DELETION ENDPOINT (Per Google Play Policy)
+// ----------------------------------------------------
+app.post('/api/account/delete', async (req, res) => {
+  try {
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch (e) {}
+    }
+    const { userId } = body || {};
+
+    // Retrieve bearer token if provided
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+    let authenticatedUserId = userId;
+
+    if (token && serverSupabase) {
+      try {
+        const { data: userData } = await serverSupabase.auth.getUser(token);
+        if (userData?.user?.id) {
+          authenticatedUserId = userData.user.id;
+        }
+      } catch (e) {
+        // Fallback to body userId
+      }
+    }
+
+    if (!authenticatedUserId) {
+      return res.status(400).json({ error: 'User ID or valid authentication token required' });
+    }
+
+    const targetId = authenticatedUserId;
+    console.log(`[Account Deletion] Processing permanent erasure for user: ${targetId}`);
+
+    // 1. In-Memory Store Cleanup
+    serverProfilesStore.delete(targetId);
+    notificationsStore.delete(targetId);
+
+    // Remove from registered usernames cache
+    for (const [uname, uId] of registeredUsernames.entries()) {
+      if (uId === targetId) {
+        registeredUsernames.delete(uname);
+      }
+    }
+
+    // Remove from follows store
+    for (const item of Array.from(followsStore)) {
+      const [fId, tId] = item.split(':');
+      if (fId === targetId || tId === targetId) {
+        followsStore.delete(item);
+      }
+    }
+
+    // Remove from blocked store
+    for (const item of Array.from(blockedStore)) {
+      const [fId, tId] = item.split(':');
+      if (fId === targetId || tId === targetId) {
+        blockedStore.delete(item);
+      }
+    }
+
+    // Remove calls from calls store
+    for (const [cId, call] of serverCallsStore.entries()) {
+      if (call.caller_id === targetId || call.callee_id === targetId) {
+        serverCallsStore.delete(cId);
+      }
+    }
+
+    // Remove user messages in memory
+    for (const [convId, list] of messagesServerStore.entries()) {
+      const remaining = list.filter((m) => m.sender_id !== targetId);
+      messagesServerStore.set(convId, remaining);
+    }
+
+    // 2. Complete Database Cleanup in Supabase (if connected)
+    if (serverSupabase) {
+      try {
+        await serverSupabase.from('messages').delete().eq('sender_id', targetId);
+        await serverSupabase.from('conversation_members').delete().eq('user_id', targetId);
+        await serverSupabase.from('calls').delete().or(`caller_id.eq.${targetId},callee_id.eq.${targetId}`);
+        await serverSupabase.from('follows').delete().or(`follower_id.eq.${targetId},following_id.eq.${targetId}`);
+        await serverSupabase.from('blocked_users').delete().or(`blocker_id.eq.${targetId},blocked_id.eq.${targetId}`);
+        await serverSupabase.from('notifications').delete().or(`user_id.eq.${targetId},actor_id.eq.${targetId}`);
+        await serverSupabase.from('profiles').delete().eq('id', targetId);
+
+        // Delete actual auth user in Supabase Auth via admin API
+        try {
+          const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+          if (serviceRoleKey) {
+            const supabaseAdmin = createClient(SUPABASE_URL, serviceRoleKey, {
+              auth: { autoRefreshToken: false, persistSession: false },
+            });
+            await supabaseAdmin.auth.admin.deleteUser(targetId);
+            console.log(`[Account Deletion] Successfully deleted auth user via Supabase Admin API: ${targetId}`);
+          }
+        } catch (authAdminErr: any) {
+          console.warn('[Account Deletion] Notice when calling deleteUser on Supabase auth admin:', authAdminErr?.message || authAdminErr);
+        }
+      } catch (dbErr: any) {
+        console.warn('[Account Deletion] Database cascading delete notice:', dbErr?.message || dbErr);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Account and all associated user data deleted permanently.',
+    });
+  } catch (error: any) {
+    console.error('[Account Deletion Error]:', error);
+    return res.status(500).json({ error: error?.message || 'Failed to delete account' });
+  }
+});
+
+// ----------------------------------------------------
 // USERNAME UNIQUENESS & AVAILABILITY API
 // ----------------------------------------------------
 

@@ -454,7 +454,11 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({
                   <li><strong>Service Configuration:</strong> Storing user-provided API credentials (when custom configured).</li>
                 </ul>
                 <p className="text-xs text-neutral-500">
-                  We do not use invasive third-party cross-site advertising trackers or behavioral profiling cookies.
+                  We use Google AdMob to display advertisements, which may use device
+                  identifiers for ad delivery and measurement, as described in the
+                  Third-Party Services section above. We do not otherwise use invasive
+                  cross-site advertising trackers or behavioral profiling cookies beyond
+                  what AdMob requires.
                 </p>
               </div>
             </section>
@@ -488,6 +492,21 @@ export const PrivacyPolicy: React.FC<PrivacyPolicyProps> = ({
                       <h4 className="text-xs font-bold text-neutral-900 dark:text-neutral-100">WebRTC P2P Direct Streaming</h4>
                       <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
                         Powers low-latency, 1-to-1 audio and video calling directly between peer browsers with STUN/TURN connection traversal.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200/80 dark:border-neutral-700/60 flex items-start gap-3">
+                    <ExternalLink className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                    <div>
+                      <h4 className="text-xs font-bold text-neutral-900 dark:text-neutral-100">Google AdMob</h4>
+                      <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
+                        We use Google AdMob to display advertisements within the Application.
+                        AdMob may collect an advertising identifier (Android Advertising ID),
+                        IP address, and device/app interaction data to serve and measure ads.
+                        This data is handled according to Google's own privacy policy, available
+                        at https://policies.google.com/privacy. You can opt out of personalized
+                        ads through your device's ad settings.
                       </p>
                     </div>
                   </div>

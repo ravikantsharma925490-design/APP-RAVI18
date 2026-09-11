@@ -27,6 +27,7 @@ import { Toast } from '@/src/components/ui/Toast';
 import { PushBanner } from '@/src/components/ui/PushBanner';
 import { TermsConditions } from '@/src/components/legal/TermsConditions';
 import { PrivacyPolicy } from '@/src/components/legal/PrivacyPolicy';
+import { DeleteAccountPage } from '@/src/components/legal/DeleteAccountPage';
 import { Profile } from '@/src/types';
 
 export default function App() {
@@ -40,6 +41,9 @@ export default function App() {
     signIn,
     signOut,
     resetPassword,
+    updatePassword,
+    isPasswordRecovery,
+    setIsPasswordRecovery,
     updateProfile,
     refreshProfile,
   } = useAuth();
@@ -131,6 +135,12 @@ export default function App() {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [viewingProfile, setViewingProfile] = useState<Profile | null>(null);
 
+  // Password Recovery form state
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordUpdateError, setPasswordUpdateError] = useState<string | null>(null);
+  const [passwordUpdateSuccess, setPasswordUpdateSuccess] = useState(false);
+
   // Calculate total unread messages count (active open chat messages are only excluded if currently viewing messages tab)
   const totalUnreadCount = useMemo(() => {
     return conversations.reduce((acc, c) => {
@@ -185,6 +195,91 @@ export default function App() {
     );
   }
 
+  if (isPasswordRecovery) {
+    const handleSetNewPassword = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setPasswordUpdateError(null);
+      if (newPassword.length < 6) {
+        setPasswordUpdateError('Password must be at least 6 characters.');
+        return;
+      }
+      if (newPassword !== confirmNewPassword) {
+        setPasswordUpdateError('Passwords do not match.');
+        return;
+      }
+      try {
+        await updatePassword(newPassword);
+        setPasswordUpdateSuccess(true);
+        setTimeout(() => {
+          window.history.pushState({}, '', '/app');
+          window.location.href = '/';
+        }, 1500);
+      } catch (err: any) {
+        setPasswordUpdateError(err.message || 'Failed to update password.');
+      }
+    };
+
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-neutral-950 text-white px-6">
+        <div className="w-full max-w-sm">
+          <h2 className="text-xl font-bold text-center mb-2">Set a new password</h2>
+          <p className="text-sm text-neutral-400 text-center mb-6">
+            Enter a new password for your account.
+          </p>
+          {passwordUpdateSuccess ? (
+            <p className="text-sm text-green-400 text-center">
+              Password updated! Redirecting you to the app...
+            </p>
+          ) : (
+            <form onSubmit={handleSetNewPassword} className="space-y-4">
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="New password"
+                className="w-full py-3 px-4 rounded-xl bg-neutral-800 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+              <input
+                type="password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                placeholder="Confirm new password"
+                className="w-full py-3 px-4 rounded-xl bg-neutral-800 border border-neutral-700 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {passwordUpdateError && (
+                <p className="text-sm text-red-400 text-center">{passwordUpdateError}</p>
+              )}
+              <button
+                type="submit"
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold cursor-pointer transition-colors"
+              >
+                Update Password
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Public standalone view of Terms, Privacy & Delete Account Policy
+  if (typeof window !== 'undefined') {
+    const pathname = window.location.pathname;
+    if (pathname === '/app/help/delete-account' || pathname === '/delete-account') {
+      return (
+        <div className="h-screen-safe w-screen bg-neutral-950 text-white overflow-hidden">
+          <DeleteAccountPage
+            onBack={() => {
+              window.history.pushState({}, '', '/app');
+              window.location.href = '/';
+            }}
+          />
+        </div>
+      );
+    }
+  }
+
   // Unauthenticated view (Support public standalone view of Terms & Privacy for App Store / Play Store Review)
   if (!user) {
     if (typeof window !== 'undefined') {
@@ -221,6 +316,7 @@ export default function App() {
           onSignIn={signIn}
           onSignUp={signUp}
           onResetPassword={resetPassword}
+          onStartPasswordRecovery={() => setIsPasswordRecovery(true)}
           authError={authError}
           clearError={() => setAuthError(null)}
           onOpenConfigModal={() => setIsConfigOpen(true)}

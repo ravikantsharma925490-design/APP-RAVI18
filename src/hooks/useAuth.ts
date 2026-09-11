@@ -153,6 +153,7 @@ export function useAuth() {
     return !localStorage.getItem('liveconnect_cached_user');
   });
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   const updateProfileState = useCallback((newProf: Profile | null) => {
     setProfile(newProf);
@@ -241,23 +242,49 @@ export function useAuth() {
 
     const supabase = getSupabase();
 
+    // Check if current URL contains recovery hash parameters
+    const checkRecoveryFromUrl = () => {
+      if (typeof window !== 'undefined') {
+        const hash = window.location.hash || '';
+        const search = window.location.search || '';
+        if (
+          hash.includes('type=recovery') ||
+          search.includes('type=recovery') ||
+          hash.includes('type=recovery_token') ||
+          (hash.includes('access_token=') && hash.includes('type=recovery'))
+        ) {
+          setIsPasswordRecovery(true);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    checkRecoveryFromUrl();
+
     // Fast fallback safety timer to ensure UI never freezes on loading
     const safetyTimer = setTimeout(() => {
       setLoading(false);
     }, 1200);
 
     // Check initial session
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
-      setSession(initialSession);
-      updateUserState(initialSession?.user ?? null);
-      if (initialSession?.user) {
-        fetchProfile(initialSession.user.id, initialSession.user);
-      }
-      setLoading(false);
-    }).catch((err) => {
-      console.warn('Get session error:', err);
-      setLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session: initialSession } }) => {
+        setSession(initialSession);
+        updateUserState(initialSession?.user ?? null);
+        if (checkRecoveryFromUrl()) {
+          setIsPasswordRecovery(true);
+        }
+        if (initialSession?.user) {
+          fetchProfile(initialSession.user.id, initialSession.user);
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.warn('Get session error:', err);
+        setLoading(false);
+      });
 
     // Subscribe to auth state changes
     const {
@@ -265,6 +292,11 @@ export function useAuth() {
     } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       setSession(newSession);
       updateUserState(newSession?.user ?? null);
+
+      if (event === 'PASSWORD_RECOVERY' || checkRecoveryFromUrl()) {
+        setIsPasswordRecovery(true);
+      }
+
       if (newSession?.user) {
         await fetchProfile(newSession.user.id, newSession.user);
       } else {
@@ -431,12 +463,26 @@ export function useAuth() {
     setAuthError(null);
     const supabase = getSupabase();
     try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin,
+        redirectTo: `${origin}/#type=recovery`,
       });
       if (error) throw error;
     } catch (err: any) {
       setAuthError(err.message || 'Failed to send password reset email');
+      throw err;
+    }
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    setAuthError(null);
+    const supabase = getSupabase();
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setIsPasswordRecovery(false);
+    } catch (err: any) {
+      setAuthError(err.message || 'Failed to update password');
       throw err;
     }
   };
@@ -573,6 +619,9 @@ export function useAuth() {
     signIn,
     signOut,
     resetPassword,
+    updatePassword,
+    isPasswordRecovery,
+    setIsPasswordRecovery,
     updateProfile,
     refreshProfile: () => user && fetchProfile(user.id, user),
   };

@@ -599,6 +599,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               {/* Direct Communication Buttons (Message, Audio Call, Video Call) */}
               <div className="grid grid-cols-3 gap-2.5">
                 {(() => {
+                  const isSelf = Boolean(currentUser?.id && targetUser?.id && currentUser.id === targetUser.id);
                   const fStatus = targetUser ? getFollowStatus?.(targetUser.id) : undefined;
                   const isF = fStatus === 'following' || fStatus === 'mutual' || Boolean(relationStatus?.isFollowing);
                   const isFB = fStatus === 'followed_by' || fStatus === 'mutual' || Boolean(relationStatus?.isFollowedBy);
