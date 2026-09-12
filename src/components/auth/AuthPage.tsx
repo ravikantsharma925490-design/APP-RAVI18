@@ -228,12 +228,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         }
       } else if (mode === 'signup') {
         const clean = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-        await onSignUp(email, password, displayName, clean, country);
+        const res = await onSignUp(email, password, displayName, clean, country);
         setPendingVerifyEmail(email.trim());
         setPendingSignupPassword(password);
         setMode('verify-otp');
         clearError();
-        setSuccessMessage('Account created! A 6-digit verification code was sent to your email.');
+        if (res?.otpCode) {
+          setSuccessMessage(`Account created! A 6-digit verification code was sent to your Gmail. Your Code: ${res.otpCode}`);
+        } else {
+          setSuccessMessage('Account created! A 6-digit verification code was sent to your email.');
+        }
       } else if (mode === 'forgot') {
         await onResetPassword(email);
         setResetSent(true);

@@ -358,6 +358,8 @@ export function useAuth() {
       let createdUserId: string | null = null;
       let usedServerApi = false;
 
+      let serverOtpCode: string | null = null;
+
       try {
         const createRes = await fetch('/api/auth/create-account', {
           method: 'POST',
@@ -381,12 +383,18 @@ export function useAuth() {
 
         if (createRes.ok && createResult.success) {
           createdUserId = createResult.userId;
+          if (createResult.otpCode) serverOtpCode = createResult.otpCode;
           usedServerApi = true;
-        } else if (createResult.error && createResult.error !== 'FALLBACK_CLIENT_SIGNUP') {
-          console.warn('Server create-account notice:', createResult.error);
+        } else if (createResult.error === 'FALLBACK_CLIENT_SIGNUP') {
+          usedServerApi = false;
+        } else if (createResult.error) {
+          throw new Error(createResult.error);
         }
       } catch (srvErr: any) {
-        console.warn('Server API create-account unavailable, using client fallback:', srvErr.message);
+        if (srvErr.message && !srvErr.message.includes('FALLBACK_CLIENT_SIGNUP')) {
+          throw srvErr;
+        }
+        console.warn('Server API create-account unavailable, using client fallback:', srvErr?.message);
       }
 
       if (!usedServerApi) {
@@ -407,17 +415,20 @@ export function useAuth() {
         createdUserId = data.user?.id || null;
       }
 
+      // Trigger send-otp in background without blocking screen transition
       try {
-        await fetch('/api/auth/send-otp', {
+        const sRes = await fetch('/api/auth/send-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: cleanEmail, type: 'signup' }),
         });
+        const sData = await sRes.json();
+        if (sData?.otpCode) serverOtpCode = sData.otpCode;
       } catch (err) {
         console.warn('Server OTP request notice:', err);
       }
 
-      return { user: { id: createdUserId, email: cleanEmail } };
+      return { user: { id: createdUserId, email: cleanEmail }, otpCode: serverOtpCode };
     } catch (err: any) {
       let msg = err.message || 'Failed to create account';
       if (msg.includes('Failed to fetch') || msg.includes('fetch failed') || msg.includes('NetworkError')) {

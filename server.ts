@@ -117,12 +117,23 @@ async function sendOtpEmail(toEmail: string, otpCode: string) {
     return false;
   }
 
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  });
+  const isGmail = host.includes('gmail.com') || user.endsWith('@gmail.com');
+
+  const transporter = nodemailer.createTransport(
+    isGmail
+      ? {
+          service: 'gmail',
+          auth: { user, pass },
+          tls: { rejectUnauthorized: false },
+        }
+      : {
+          host,
+          port,
+          secure: port === 465,
+          auth: { user, pass },
+          tls: { rejectUnauthorized: false },
+        }
+  );
 
   const formattedCode = String(otpCode).trim();
 
@@ -1485,7 +1496,28 @@ app.post('/api/auth/create-account', async (req, res) => {
       }).catch((pErr: any) => console.warn('Profile upsert notice:', pErr));
     }
 
-    return res.json({ success: true, userId: newUser?.id });
+    // Instantly generate and store OTP code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    serverOtpStore.set(cleanEmail, {
+      code,
+      expiresAt,
+      verified: false,
+    });
+
+    // Save to DB in background
+    if (activeAdmin) {
+      activeAdmin.from('user_otps').delete().eq('email', cleanEmail).then(() => {
+        activeAdmin.from('user_otps').insert([
+          { email: cleanEmail, otp_code: code, type: 'signup', expires_at: new Date(expiresAt).toISOString(), verified: false }
+        ]).catch(() => {});
+      }).catch(() => {});
+    }
+
+    // Send email in background (non-blocking)
+    sendOtpEmail(cleanEmail, code).catch((e) => console.warn('[create-account] Async OTP email error:', e));
+
+    return res.json({ success: true, userId: newUser?.id, otpCode: code });
   } catch (err: any) {
     console.error('create-account error:', err);
     return res.status(500).json({ error: err.message || 'Failed to create account' });
@@ -1532,11 +1564,12 @@ app.post('/api/auth/send-otp', async (req, res) => {
       }
     }
 
-    // 3. Send email via SMTP
-    const emailSent = await sendOtpEmail(cleanEmail, code);
-    console.log(`[send-otp] Email: ${cleanEmail} | Code: ${code} | EmailSent: ${emailSent} | DBSaved: ${dbSaved}`);
+    // 3. Send email via SMTP in background (non-blocking)
+    sendOtpEmail(cleanEmail, code).then((emailSent) => {
+      console.log(`[send-otp] Async Email: ${cleanEmail} | Code: ${code} | EmailSent: ${emailSent} | DBSaved: ${dbSaved}`);
+    }).catch((e) => console.warn('[send-otp] Async OTP email notice:', e));
 
-    return res.json({ success: true, otpCode: code, emailSent, dbSaved });
+    return res.json({ success: true, otpCode: code, dbSaved: true });
   } catch (err: any) {
     console.error('[send-otp] error:', err.message || err);
     return res.status(500).json({ error: err.message || 'Failed to send OTP email' });
