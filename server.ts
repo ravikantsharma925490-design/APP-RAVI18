@@ -138,20 +138,24 @@ async function sendOtpEmail(toEmail: string, otpCode: string) {
   const formattedCode = String(otpCode).trim();
 
   const htmlContent = `
-<div style="font-family: 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background-color: #0f172a; border-radius: 16px; color: #ffffff; border: 1px solid #1e293b;">
-  <div style="text-align: center; margin-bottom: 24px;">
-    <h2 style="color: #38bdf8; font-size: 24px; margin: 0; font-weight: 800; letter-spacing: -0.5px;">LiveConnect Verification</h2>
-    <p style="color: #94a3b8; font-size: 14px; margin-top: 6px;">Your 6-digit verification code</p>
-  </div>
-
-  <div style="background-color: #1e293b; border: 2px solid #38bdf8; border-radius: 14px; padding: 24px; text-align: center; margin-bottom: 24px;">
-    <p style="color: #cbd5e1; font-size: 12px; margin: 0 0 12px 0; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px;">Verification Code</p>
-    <div style="font-size: 42px; font-weight: 900; letter-spacing: 12px; color: #ffffff; background-color: #0284c7; padding: 16px 20px; border-radius: 10px; font-family: monospace; display: inline-block; width: 85%;">
-      ${formattedCode}
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px;">
+  <div style="max-width: 460px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 32px 24px; border: 1px solid #e2e8f0; text-align: center;">
+    <h2 style="color: #0284c7; margin-top: 0; font-size: 24px; font-weight: bold;">LiveConnect</h2>
+    <p style="color: #475569; font-size: 15px; margin-bottom: 24px;">Use the verification code below to confirm your email address and finish signing up.</p>
+    
+    <div style="background-color: #f1f5f9; border: 2px dashed #0284c7; border-radius: 10px; padding: 20px; margin-bottom: 24px; display: inline-block; width: 85%;">
+      <span style="font-family: monospace, Courier, monospace; font-size: 38px; font-weight: bold; letter-spacing: 10px; color: #0f172a; display: block;">
+        ${formattedCode}
+      </span>
     </div>
-    <p style="color: #94a3b8; font-size: 13px; margin: 16px 0 0 0;">Valid for <strong>5 minutes</strong>. Do not share this code.</p>
+
+    <p style="color: #64748b; font-size: 13px; margin: 0;">⏱️ Note: This code will expire in <strong>10 minutes</strong> and can only be used once.</p>
   </div>
-</div>
+</body>
+</html>
   `;
 
   try {

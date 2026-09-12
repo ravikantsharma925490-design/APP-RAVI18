@@ -228,16 +228,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         }
       } else if (mode === 'signup') {
         const clean = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-        const res = await onSignUp(email, password, displayName, clean, country);
+        await onSignUp(email, password, displayName, clean, country);
         setPendingVerifyEmail(email.trim());
         setPendingSignupPassword(password);
         setMode('verify-otp');
         clearError();
-        if (res?.otpCode) {
-          setSuccessMessage(`Account created! A 6-digit verification code was sent to your Gmail. Your Code: ${res.otpCode}`);
-        } else {
-          setSuccessMessage('Account created! A 6-digit verification code was sent to your email.');
-        }
+        setSuccessMessage('Account created! A 6-digit verification code has been sent to your Gmail inbox.');
       } else if (mode === 'forgot') {
         await onResetPassword(email);
         setResetSent(true);
@@ -442,7 +438,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not resend code.');
       if (data.otpCode) {
-        setSuccessMessage(`Fresh verification code generated! ${data.emailSent ? 'Sent to your Gmail.' : 'Your Code: ' + data.otpCode}`);
+        setSuccessMessage('Fresh 6-digit verification code sent to your Gmail inbox!');
       } else {
         setSuccessMessage('A fresh 6-digit verification code has been sent to your email!');
       }
