@@ -220,10 +220,34 @@ const blockedStore = new Set<string>(); // "blockerId:blockedId" (UUIDs only)
 const notificationsStore = new Map<string, any[]>(); // userId -> Notification[]
 const serverProfilesStore = new Map<string, any>(); // userId -> Profile
 
+function extractUrlFromJwt(token?: string): string | null {
+  if (!token) return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length >= 2) {
+      const decoded = Buffer.from(parts[1], 'base64').toString('utf-8');
+      const parsed = JSON.parse(decoded);
+      if (parsed?.ref && typeof parsed.ref === 'string') {
+        return `https://${parsed.ref}.supabase.co`;
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return null;
+}
+
 // Server-side Supabase client initialization
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://slvojojyssepcarxlmfd.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsdm9qb2p5c3NlcGNhcnhsbWZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MTkzMTEsImV4cCI6MjEwMjQ5NTMxMX0.9ZVwwycoPtNKo7zQXgkuGnz4xBqnAfUvtHGb47rR0A8';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsdm9qb2p5c3NlcGNhcnhsbWZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MTkzMTEsImV4cCI6MjEwMjQ5NTMxMX0.9ZVwwycoPtNKo7zQXgkuGnz4xBqnAfUvtHGb47rR0A8';
+
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+
+let rawUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+if (!rawUrl || rawUrl.includes('your-supabase-project') || rawUrl.includes('placeholder')) {
+  rawUrl = extractUrlFromJwt(SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY) || 'https://slvojojyssepcarxlmfd.supabase.co';
+}
+const SUPABASE_URL = rawUrl;
 
 // Standard Supabase client (Uses ANON KEY for public/regular ops)
 let serverSupabase: any = null;
