@@ -40,6 +40,7 @@ export default function App() {
     setAuthError,
     signUp,
     signIn,
+    signInWithGoogle,
     sendLoginOtp,
     signOut,
     resetPassword,
@@ -384,11 +385,12 @@ export default function App() {
           onSignIn={signIn}
           onSignUp={signUp}
           onSendLoginOtp={sendLoginOtp}
+          onGoogleSignIn={signInWithGoogle}
           onResetPassword={resetPassword}
           onStartPasswordRecovery={() => setIsPasswordRecovery(true)}
           authError={authError}
           clearError={() => setAuthError(null)}
-          onOpenConfigModal={() => setIsConfigOpen(true)}
+          onOpenConfig={() => setIsConfigOpen(true)}
         />
         <ConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} />
         {callError && (

@@ -918,7 +918,7 @@ export function useSocialRelations(currentProfile?: Profile | null) {
           body: JSON.stringify({
             userId: currentUserId,
             targetUserId: targetId,
-            targetEmail: targetUser.email || undefined,
+            targetEmail: (targetUser as any).email || undefined,
             targetUsername: targetUser.username,
             targetDisplayName: targetUser.display_name,
             sendEmail: true,
@@ -1024,7 +1024,7 @@ export function useSocialRelations(currentProfile?: Profile | null) {
           body: JSON.stringify({
             adminId: currentUserId,
             targetUserId: targetUser.id,
-            targetEmail: targetUser.email || undefined,
+            targetEmail: (targetUser as any).email || undefined,
             targetUsername: targetUser.username,
             targetDisplayName: targetUser.display_name,
             reason: reason || 'Violation of LiveConnect Community Guidelines & Safety Policies',

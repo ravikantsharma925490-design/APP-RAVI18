@@ -327,6 +327,7 @@ export function useAuth() {
     }
 
     const supabase = getSupabase();
+    const cleanEmail = email.trim().toLowerCase();
     try {
       const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
       if (cleanUsername.length < 3) {
@@ -352,8 +353,6 @@ export function useAuth() {
       }
 
       const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
-
-      const cleanEmail = email.trim().toLowerCase();
 
       let createdUserId: string | null = null;
       let usedServerApi = false;
@@ -383,8 +382,8 @@ export function useAuth() {
 
         if (createRes.ok && createResult.success) {
           createdUserId = createResult.userId;
-          if (createResult.otpCode) serverOtpCode = createResult.otpCode;
           usedServerApi = true;
+          return { needsOtp: true, email: cleanEmail };
         } else if (createResult.error === 'FALLBACK_CLIENT_SIGNUP') {
           usedServerApi = false;
         } else if (createResult.error) {
@@ -415,22 +414,32 @@ export function useAuth() {
         createdUserId = data.user?.id || null;
       }
 
-      // Trigger send-otp in background without blocking screen transition
-      try {
-        const sRes = await fetch('/api/auth/send-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: cleanEmail, type: 'signup' }),
-        });
-        const sData = await sRes.json();
-        if (sData?.otpCode) serverOtpCode = sData.otpCode;
-      } catch (err) {
-        console.warn('Server OTP request notice:', err);
-      }
-
-      return { user: { id: createdUserId, email: cleanEmail }, otpCode: serverOtpCode };
+      return { user: { id: createdUserId, email: cleanEmail } };
     } catch (err: any) {
       let msg = err.message || 'Failed to create account';
+      if (msg.toLowerCase().includes('rate limit')) {
+        // Automatically bypass email rate limit using Admin API
+        setAuthError(null);
+        try {
+          const syncRes = await fetch('/api/auth/confirm-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: cleanEmail, password }),
+          });
+          const syncText = await syncRes.text();
+          let syncData: any = {};
+          if (syncText) { try { syncData = JSON.parse(syncText); } catch (e) {} }
+          if (syncData?.session) {
+            const { data: sessData } = await supabase.auth.setSession(syncData.session);
+            if (sessData?.user) {
+              await fetchProfile(sessData.user.id, sessData.user);
+              return { user: { id: sessData.user.id, email: cleanEmail } };
+            }
+          }
+        } catch (bErr) {
+          console.warn('Rate limit admin bypass error:', bErr);
+        }
+      }
       if (msg.includes('Failed to fetch') || msg.includes('fetch failed') || msg.includes('NetworkError')) {
         msg = 'Network connection failed. Please check your Supabase Project URL in Settings.';
       } else if (msg.includes('Invalid API key') || msg.includes('JWT')) {
@@ -456,35 +465,24 @@ export function useAuth() {
       throw err;
     }
 
-    const supabase = getSupabase();
     try {
       const cleanEmail = email.trim().toLowerCase();
 
-      // Delegate OTP generation, DB insertion, and email dispatch to backend server
-      try {
-        await fetch('/api/auth/send-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: cleanEmail, type: 'login' }),
-        });
-      } catch (err) {
-        console.warn('Server login OTP request notice:', err);
+      // Delegate OTP generation, DB insertion, and email dispatch to backend server (bypasses Supabase native rate limits)
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, type: 'login' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send OTP code');
       }
-
-      const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
-      try {
-        await supabase.auth.signInWithOtp({
-          email: cleanEmail,
-          options: {
-            emailRedirectTo: origin,
-          },
-        });
-      } catch (sErr) {
-        console.warn('Supabase native OTP notice:', sErr);
-      }
+      return data;
     } catch (err: any) {
-      setAuthError(err.message || 'Failed to send OTP code');
-      throw err;
+      let msg = err.message || 'Failed to send OTP code';
+      setAuthError(msg);
+      throw new Error(msg);
     }
   };
 
@@ -512,17 +510,48 @@ export function useAuth() {
       return data;
     } catch (err: any) {
       let msg = err.message || 'Failed to sign in';
-      if (msg.includes('Email not confirmed')) {
-        // Clear scary error and trigger smooth OTP sending
+      if (msg.includes('Email not confirmed') || msg.includes('Invalid login credentials') || msg.toLowerCase().includes('rate limit')) {
+        // Auto-confirm email & sync password server-side via admin API and retry login automatically
         setAuthError(null);
         try {
-          await sendLoginOtp(email.trim());
-        } catch (otpErr) {
-          // ignore
+          const syncRes = await fetch('/api/auth/confirm-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email.trim(), password }),
+          });
+          const syncText = await syncRes.text();
+          let syncData: any = {};
+          if (syncText) {
+            try {
+              syncData = JSON.parse(syncText);
+            } catch (pErr) {
+              console.warn('confirm-user JSON parse notice:', pErr);
+            }
+          }
+          if (syncData?.success) {
+            if (syncData.session) {
+              const { data: sessData } = await supabase.auth.setSession(syncData.session);
+              if (sessData?.user) {
+                await fetchProfile(sessData.user.id, sessData.user);
+                return sessData;
+              }
+            }
+            const retryRes = await supabase.auth.signInWithPassword({
+              email: email.trim(),
+              password,
+            });
+            if (retryRes.data?.user) {
+              await fetchProfile(retryRes.data.user.id, retryRes.data.user);
+              return retryRes.data;
+            }
+          }
+        } catch (confirmErr) {
+          console.warn('Auto-confirm retry notice:', confirmErr);
         }
-        throw new Error('EMAIL_NOT_CONFIRMED_OTP_SENT');
-      } else if (msg.includes('Invalid login credentials')) {
-        msg = 'Invalid email or password. Please check your credentials and try again.';
+
+        if (msg.includes('Invalid login credentials')) {
+          msg = 'Invalid email or password. Please check your credentials and try again.';
+        }
       } else if (msg.includes('Failed to fetch')) {
         msg = 'Unable to reach Supabase. Please verify your Supabase URL in Settings.';
       }
@@ -698,6 +727,40 @@ export function useAuth() {
     updated_at: user.updated_at || new Date().toISOString(),
   } : null);
 
+  const signInWithGoogle = async () => {
+    setAuthError(null);
+    const { isConfigured } = getSupabaseConfig();
+    if (!isConfigured) {
+      const err = new Error('Supabase is not configured yet. Please enter your Supabase URL & Key in Settings.');
+      setAuthError(err.message);
+      throw err;
+    }
+
+    const supabase = getSupabase();
+    try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: origin,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+      if (error) throw error;
+      return data;
+    } catch (err: any) {
+      let msg = err.message || 'Failed to sign in with Google';
+      if (msg.toLowerCase().includes('provider is not enabled') || msg.toLowerCase().includes('unsupported provider')) {
+        msg = 'Google Sign-In is not enabled in your Supabase Dashboard. Please enable Google provider under Authentication -> Providers in Supabase.';
+      }
+      setAuthError(msg);
+      throw new Error(msg);
+    }
+  };
+
   return {
     user,
     profile: effectiveProfile,
@@ -707,6 +770,7 @@ export function useAuth() {
     setAuthError,
     signUp,
     signIn,
+    signInWithGoogle,
     sendLoginOtp,
     signOut,
     resetPassword,

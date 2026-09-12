@@ -11,27 +11,6 @@
     <meta name="format-detection" content="telephone=no" />
     <title>LiveConnect - Real-Time Chat & Video Calls</title>
     <meta name="description" content="One-to-one real-time messaging, audio, and video calling powered by Supabase and LiveKit." />
-    <script>
-      (function() {
-        try {
-          var currentFetch = window.fetch ? window.fetch.bind(window) : undefined;
-          if (currentFetch) {
-            Object.defineProperty(window, 'fetch', {
-              get: function() {
-                return currentFetch;
-              },
-              set: function(val) {
-                currentFetch = val;
-              },
-              configurable: true,
-              enumerable: true
-            });
-          }
-        } catch (e) {
-          console.warn('Window fetch property setup warning:', e);
-        }
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>

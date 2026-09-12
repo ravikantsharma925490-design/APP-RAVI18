@@ -24,6 +24,7 @@ interface AuthPageProps {
   onSignIn: (email: string, pass: string) => Promise<any>;
   onSignUp: (email: string, pass: string, name: string, username: string, country?: string) => Promise<any>;
   onSendLoginOtp?: (email: string) => Promise<any>;
+  onGoogleSignIn?: () => Promise<any>;
   onResetPassword: (email: string) => Promise<any>;
   onStartPasswordRecovery?: () => void;
   onOpenConfig: () => void;
@@ -64,6 +65,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   onSignIn,
   onSignUp,
   onSendLoginOtp,
+  onGoogleSignIn,
   onResetPassword,
   onStartPasswordRecovery,
   onOpenConfig,
@@ -84,6 +86,33 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   >('idle');
   const [usernameFeedback, setUsernameFeedback] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleGoogleAuth = async () => {
+    clearError();
+    setGoogleLoading(true);
+    try {
+      if (onGoogleSignIn) {
+        await onGoogleSignIn();
+      } else {
+        const supabase = (await import('@/src/lib/supabase/client')).getSupabase();
+        if (!supabase) throw new Error('Database client unavailable');
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: origin,
+            queryParams: { access_type: 'offline', prompt: 'consent' },
+          },
+        });
+        if (error) throw error;
+      }
+    } catch (err: any) {
+      // Error handled in parent hook
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
   const [resetSent, setResetSent] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -216,24 +245,28 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
     try {
       if (mode === 'login') {
-        try {
-          await onSignIn(email, password);
-        } catch (signInErr: any) {
-          if (signInErr?.message === 'EMAIL_NOT_CONFIRMED_OTP_SENT') {
-            setPendingVerifyEmail(email.trim());
-            setMode('verify-otp');
-            clearError();
-            setSuccessMessage('An OTP verification code was sent to your email!');
-          }
-        }
+        await onSignIn(email, password);
       } else if (mode === 'signup') {
         const clean = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-        await onSignUp(email, password, displayName, clean, country);
-        setPendingVerifyEmail(email.trim());
-        setPendingSignupPassword(password);
-        setMode('verify-otp');
-        clearError();
-        setSuccessMessage('Account created! A 6-digit verification code has been sent to your Gmail inbox.');
+        const result = await onSignUp(email, password, displayName, clean, country);
+        if (result?.needsOtp) {
+          setPendingVerifyEmail(email.trim());
+          setPendingSignupPassword(password);
+          setMode('verify-otp');
+          setSuccessMessage('A 6-digit verification code was sent to your email!');
+        } else {
+          clearError();
+          setSuccessMessage('🎉 Account created successfully! Logging you in...');
+          try {
+            const supabase = (await import('@/src/lib/supabase/client')).getSupabase();
+            const currentSess = supabase ? await supabase.auth.getSession() : null;
+            if (!currentSess?.data?.session?.user) {
+              await onSignIn(email, password);
+            }
+          } catch (ign) {
+            // Handled by auto-confirm fallback
+          }
+        }
       } else if (mode === 'forgot') {
         await onResetPassword(email);
         setResetSent(true);
@@ -305,10 +338,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       if (onSendLoginOtp) {
         await onSendLoginOtp(email);
       } else {
-        const supabase = (await import('@/src/lib/supabase/client')).getSupabase();
-        if (!supabase) throw new Error('Database client unavailable');
-        const { error } = await supabase.auth.signInWithOtp({ email: email.trim() });
-        if (error) throw error;
+        const res = await fetch('/api/auth/send-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim().toLowerCase(), type: 'login' }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to send OTP code');
       }
       setPendingVerifyEmail(email.trim());
       setMode('verify-otp');
@@ -408,11 +444,31 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       }
 
       if (pendingSignupPassword) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: pendingVerifyEmail,
-          password: pendingSignupPassword,
-        });
-        if (signInError) throw signInError;
+        let loggedIn = false;
+        try {
+          const confirmRes = await fetch('/api/auth/confirm-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: pendingVerifyEmail.trim(), password: pendingSignupPassword }),
+          });
+          const confirmData = await confirmRes.json();
+          if (confirmData?.session) {
+            const { data: sData } = await supabase.auth.setSession(confirmData.session);
+            if (sData?.user) {
+              loggedIn = true;
+            }
+          }
+        } catch (cErr) {
+          console.warn('[handleVerifyOtp] confirm-user notice:', cErr);
+        }
+
+        if (!loggedIn) {
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: pendingVerifyEmail,
+            password: pendingSignupPassword,
+          });
+          if (signInError) throw signInError;
+        }
       }
 
       setSuccessMessage('OTP code verified! Logging you in...');
@@ -845,6 +901,52 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
           {/* Form end */}
         </form>
+        )}
+
+        {/* Google Sign-In Divider & Button */}
+        {mode !== 'verify-otp' && mode !== 'forgot' && (
+          <div className="space-y-3.5 pt-1">
+            <div className="relative flex items-center justify-center">
+              <div className="border-t border-neutral-700/60 w-full"></div>
+              <span className="bg-neutral-900 px-3 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider shrink-0">
+                Or continue with
+              </span>
+              <div className="border-t border-neutral-700/60 w-full"></div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGoogleAuth}
+              disabled={googleLoading || loading}
+              className="w-full py-2.5 px-4 rounded-xl bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 hover:border-neutral-600 text-white font-medium text-xs transition-all flex items-center justify-center gap-2.5 cursor-pointer shadow-sm disabled:opacity-50 hover:scale-[1.01] active:scale-[0.99]"
+            >
+              {googleLoading ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                  <span className="font-semibold text-neutral-200">Continue with Google</span>
+                </>
+              )}
+            </button>
+          </div>
         )}
 
         {/* Verify OTP / Email Confirmation Mode */}

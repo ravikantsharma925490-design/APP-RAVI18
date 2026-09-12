@@ -29,9 +29,9 @@ const GLOBAL_DEFAULT_ICE_SERVERS: RTCConfiguration = {
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:stun.services.mozilla.com' },
     {
-      urls: '',
-      username: '',
-      credential: '',
+      urls: 'turn:free.expressturn.com:3478',
+      username: '000000002104365271',
+      credential: 'Jm1+P1ebN0sYSg6A3DHDSfciAys',
     },
     {
       urls: [
