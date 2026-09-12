@@ -168,6 +168,17 @@ CREATE TABLE IF NOT EXISTS public.problem_reports (
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
+-- 12. User OTPs (for OTP Email & DB Storage)
+CREATE TABLE IF NOT EXISTS public.user_otps (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT NOT NULL,
+    otp_code TEXT NOT NULL,
+    type TEXT DEFAULT 'signup',
+    verified BOOLEAN DEFAULT false,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
 -- Enable RLS and Realtime
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
@@ -180,6 +191,11 @@ ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.follows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.blocked_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.problem_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_otps ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all for user_otps" ON public.user_otps;
+CREATE POLICY "Allow all for user_otps" ON public.user_otps FOR ALL USING (true) WITH CHECK (true);
+GRANT ALL ON public.user_otps TO anon, authenticated, service_role;
 
 -- Add RLS Policies for full access to authenticated users
 DROP POLICY IF EXISTS "Profiles are viewable by authenticated users" ON public.profiles;

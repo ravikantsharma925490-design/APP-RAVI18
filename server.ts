@@ -112,7 +112,10 @@ async function sendOtpEmail(toEmail: string, otpCode: string) {
   const user = process.env.SMTP_USER || process.env.GMAIL_USER;
   const pass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
 
-  if (!user || !pass) return false;
+  if (!user || !pass) {
+    console.warn('[OTP Email] Missing SMTP_USER or SMTP_PASS environment variables');
+    return false;
+  }
 
   const transporter = nodemailer.createTransport({
     host,
@@ -121,16 +124,21 @@ async function sendOtpEmail(toEmail: string, otpCode: string) {
     auth: { user, pass },
   });
 
+  const formattedCode = String(otpCode).trim();
+
   const htmlContent = `
-<div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 28px 20px; background-color: #0a0a0a; border-radius: 16px; color: #ffffff; border: 1px solid #262626;">
-  <div style="text-align: center; margin-bottom: 20px;">
-    <h2 style="color: #3b82f6; font-size: 22px; margin: 0; font-weight: 800;">LiveConnect Verification</h2>
-    <p style="color: #a3a3a3; font-size: 13px; margin-top: 4px;">Your 5-minute login verification code</p>
+<div style="font-family: 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background-color: #0f172a; border-radius: 16px; color: #ffffff; border: 1px solid #1e293b;">
+  <div style="text-align: center; margin-bottom: 24px;">
+    <h2 style="color: #38bdf8; font-size: 24px; margin: 0; font-weight: 800; letter-spacing: -0.5px;">LiveConnect Verification</h2>
+    <p style="color: #94a3b8; font-size: 14px; margin-top: 6px;">Your 6-digit verification code</p>
   </div>
-  <div style="background-color: #171717; border: 1px solid #262626; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
-    <p style="color: #a3a3a3; font-size: 12px; margin: 0 0 10px 0; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Your Verification Code</p>
-    <div style="font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #60a5fa; padding: 10px 0;">${otpCode}</div>
-    <p style="color: #737373; font-size: 12px; margin: 10px 0 0 0;">This code is valid for <strong>5 minutes</strong>. Do not share it with anyone.</p>
+
+  <div style="background-color: #1e293b; border: 2px solid #38bdf8; border-radius: 14px; padding: 24px; text-align: center; margin-bottom: 24px;">
+    <p style="color: #cbd5e1; font-size: 12px; margin: 0 0 12px 0; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px;">Verification Code</p>
+    <div style="font-size: 42px; font-weight: 900; letter-spacing: 12px; color: #ffffff; background-color: #0284c7; padding: 16px 20px; border-radius: 10px; font-family: monospace; display: inline-block; width: 85%;">
+      ${formattedCode}
+    </div>
+    <p style="color: #94a3b8; font-size: 13px; margin: 16px 0 0 0;">Valid for <strong>5 minutes</strong>. Do not share this code.</p>
   </div>
 </div>
   `;
@@ -139,10 +147,10 @@ async function sendOtpEmail(toEmail: string, otpCode: string) {
     await transporter.sendMail({
       from: `"LiveConnect Auth" <${user}>`,
       to: toEmail,
-      subject: `🔑 LiveConnect Verification Code: ${otpCode}`,
+      subject: `🔑 ${formattedCode} - LiveConnect Verification Code`,
       html: htmlContent,
     });
-    console.log(`[OTP Email] Successfully sent OTP ${otpCode} to ${toEmail}`);
+    console.log(`[OTP Email] Successfully sent OTP ${formattedCode} to ${toEmail}`);
     return true;
   } catch (err: any) {
     console.warn(`[OTP Email] Error sending to ${toEmail}:`, err.message || err);
@@ -212,14 +220,27 @@ const blockedStore = new Set<string>(); // "blockerId:blockedId" (UUIDs only)
 const notificationsStore = new Map<string, any[]>(); // userId -> Notification[]
 const serverProfilesStore = new Map<string, any>(); // userId -> Profile
 
-// Server-side Supabase client initialization (if credentials available)
+// Server-side Supabase client initialization
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://slvojojyssepcarxlmfd.supabase.co';
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsdm9qb2p5c3NlcGNhcnhsbWZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MTkzMTEsImV4cCI6MjEwMjQ5NTMxMX0.9ZVwwycoPtNKo7zQXgkuGnz4xBqnAfUvtHGb47rR0A8';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
+// Standard Supabase client (Uses ANON KEY for public/regular ops)
 let serverSupabase: any = null;
+// Dedicated Admin Supabase client (Uses SERVICE ROLE KEY strictly for OTP, Ban, and Account Deletion)
+let adminSupabase: any = null;
+
 try {
   if (SUPABASE_URL && SUPABASE_ANON_KEY) {
     serverSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    const adminKey = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+    adminSupabase = createClient(SUPABASE_URL, adminKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
+
+    console.log(`[Server Supabase] Standard client: ANON_KEY | Admin client (OTP/Ban/Delete): ${SUPABASE_SERVICE_ROLE_KEY ? 'SERVICE_ROLE_KEY' : 'ANON_KEY'}`);
+
     // Preload all follows into memory
     serverSupabase
       .from('follows')
@@ -523,25 +544,22 @@ app.post('/api/account/delete', async (req, res) => {
       messagesServerStore.set(convId, remaining);
     }
 
-    // 2. Complete Database Cleanup in Supabase (if connected)
-    if (serverSupabase) {
+    // 2. Complete Database & Auth Deletion in Supabase (uses adminSupabase with Service Role Key)
+    const activeAdmin = adminSupabase || serverSupabase;
+    if (activeAdmin) {
       try {
-        await serverSupabase.from('messages').delete().eq('sender_id', targetId);
-        await serverSupabase.from('conversation_members').delete().eq('user_id', targetId);
-        await serverSupabase.from('calls').delete().or(`caller_id.eq.${targetId},callee_id.eq.${targetId}`);
-        await serverSupabase.from('follows').delete().or(`follower_id.eq.${targetId},following_id.eq.${targetId}`);
-        await serverSupabase.from('blocked_users').delete().or(`blocker_id.eq.${targetId},blocked_id.eq.${targetId}`);
-        await serverSupabase.from('notifications').delete().or(`user_id.eq.${targetId},actor_id.eq.${targetId}`);
-        await serverSupabase.from('profiles').delete().eq('id', targetId);
+        await activeAdmin.from('messages').delete().eq('sender_id', targetId);
+        await activeAdmin.from('conversation_members').delete().eq('user_id', targetId);
+        await activeAdmin.from('calls').delete().or(`caller_id.eq.${targetId},callee_id.eq.${targetId}`);
+        await activeAdmin.from('follows').delete().or(`follower_id.eq.${targetId},following_id.eq.${targetId}`);
+        await activeAdmin.from('blocked_users').delete().or(`blocker_id.eq.${targetId},blocked_id.eq.${targetId}`);
+        await activeAdmin.from('notifications').delete().or(`user_id.eq.${targetId},actor_id.eq.${targetId}`);
+        await activeAdmin.from('profiles').delete().eq('id', targetId);
 
         // Delete actual auth user in Supabase Auth via admin API
         try {
-          const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-          if (serviceRoleKey) {
-            const supabaseAdmin = createClient(SUPABASE_URL, serviceRoleKey, {
-              auth: { autoRefreshToken: false, persistSession: false },
-            });
-            await supabaseAdmin.auth.admin.deleteUser(targetId);
+          if (activeAdmin.auth?.admin) {
+            await activeAdmin.auth.admin.deleteUser(targetId);
             console.log(`[Account Deletion] Successfully deleted auth user via Supabase Admin API: ${targetId}`);
           }
         } catch (authAdminErr: any) {
@@ -1382,17 +1400,180 @@ app.post('/api/admin/ban-user', async (req, res) => {
   }
 });
 
-// 4c. Send OTP Email Endpoint
+// Server-side in-memory OTP cache fallback
+const serverOtpStore = new Map<string, { code: string; expiresAt: number; verified: boolean }>();
+
+// 4b. Create Account Server Endpoint (Bypasses Supabase default email if Service Role Key exists)
+app.post('/api/auth/create-account', async (req, res) => {
+  try {
+    const { email, password, displayName, username, country } = req.body;
+    if (!email || !password || !username) {
+      return res.status(400).json({ error: 'email, password and username are required' });
+    }
+
+    if (!SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(400).json({ 
+        error: 'FALLBACK_CLIENT_SIGNUP', 
+        message: 'SUPABASE_SERVICE_ROLE_KEY is not configured in server environment.' 
+      });
+    }
+
+    const activeAdmin = adminSupabase || (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } }) : null);
+
+    if (!activeAdmin || !activeAdmin.auth || !activeAdmin.auth.admin) {
+      return res.status(400).json({ 
+        error: 'FALLBACK_CLIENT_SIGNUP', 
+        message: 'Admin client not available.' 
+      });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanUsername = String(username).trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+
+    const { data: createData, error: createError } = await activeAdmin.auth.admin.createUser({
+      email: cleanEmail,
+      password,
+      email_confirm: false,
+      user_metadata: {
+        display_name: displayName?.trim() || cleanUsername,
+        username: cleanUsername,
+        country: country || 'India',
+      },
+    });
+
+    if (createError) {
+      return res.status(400).json({ 
+        error: createError.message || 'Failed to create account via Admin API',
+        code: createError.code 
+      });
+    }
+
+    const newUser = createData?.user;
+
+    if (newUser) {
+      await activeAdmin.from('profiles').upsert({
+        id: newUser.id,
+        username: cleanUsername,
+        display_name: displayName?.trim() || cleanUsername,
+        country: country || 'India',
+        bio: 'Hey there! I am using LiveConnect.',
+        is_online: false,
+      }).catch((pErr: any) => console.warn('Profile upsert notice:', pErr));
+    }
+
+    return res.json({ success: true, userId: newUser?.id });
+  } catch (err: any) {
+    console.error('create-account error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to create account' });
+  }
+});
+
+// 4c. Send OTP Email & Save to DB Endpoint
 app.post('/api/auth/send-otp', async (req, res) => {
+  try {
+    const { email, type = 'signup' } = req.body;
+    if (!email) return res.status(400).json({ error: 'email is required' });
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes expiry
+
+    // 1. Always save to server in-memory store
+    serverOtpStore.set(cleanEmail, {
+      code,
+      expiresAt,
+      verified: false,
+    });
+
+    // 2. Save to Supabase DB if client is available
+    const activeAdmin = adminSupabase || serverSupabase;
+    let dbSaved = false;
+    if (activeAdmin) {
+      try {
+        await activeAdmin.from('user_otps').delete().eq('email', cleanEmail);
+        const { error: insErr } = await activeAdmin.from('user_otps').insert([
+          { email: cleanEmail, otp_code: code, type, expires_at: new Date(expiresAt).toISOString(), verified: false },
+        ]);
+        if (!insErr) {
+          dbSaved = true;
+        } else {
+          // Fallback insert without type column
+          const { error: fbErr } = await activeAdmin.from('user_otps').insert([
+            { email: cleanEmail, otp_code: code, expires_at: new Date(expiresAt).toISOString(), verified: false },
+          ]);
+          if (!fbErr) dbSaved = true;
+        }
+      } catch (dbEx: any) {
+        console.warn('[send-otp] DB notice:', dbEx.message);
+      }
+    }
+
+    // 3. Send email via SMTP
+    const emailSent = await sendOtpEmail(cleanEmail, code);
+    console.log(`[send-otp] Email: ${cleanEmail} | Code: ${code} | EmailSent: ${emailSent} | DBSaved: ${dbSaved}`);
+
+    return res.json({ success: true, otpCode: code, emailSent, dbSaved });
+  } catch (err: any) {
+    console.error('[send-otp] error:', err.message || err);
+    return res.status(500).json({ error: err.message || 'Failed to send OTP email' });
+  }
+});
+
+// 4d. Verify OTP Server Endpoint
+app.post('/api/auth/verify-otp', async (req, res) => {
   try {
     const { email, otpCode } = req.body;
     if (!email || !otpCode) {
       return res.status(400).json({ error: 'email and otpCode are required' });
     }
-    const emailSent = await sendOtpEmail(email.trim().toLowerCase(), String(otpCode));
-    return res.json({ success: true, emailSent });
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanCode = String(otpCode).trim();
+
+    // 1. Check server in-memory cache first
+    const memRecord = serverOtpStore.get(cleanEmail);
+    if (memRecord) {
+      if (memRecord.verified) {
+        return res.status(400).json({ error: 'This code was already used. Please request a new code.' });
+      }
+      if (Date.now() > memRecord.expiresAt) {
+        return res.status(400).json({ error: 'This code has expired. Please request a new code.' });
+      }
+      if (memRecord.code === cleanCode) {
+        memRecord.verified = true;
+        return res.json({ success: true, verified: true });
+      }
+    }
+
+    // 2. Check Supabase DB
+    const activeAdmin = adminSupabase || serverSupabase;
+    if (activeAdmin) {
+      const { data: rows } = await activeAdmin
+        .from('user_otps')
+        .select('*')
+        .ilike('email', cleanEmail)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (rows && rows.length > 0) {
+        const row = rows[0];
+        if (row.verified) {
+          return res.status(400).json({ error: 'This code was already used. Please request a new code.' });
+        }
+        if (new Date(row.expires_at).getTime() < Date.now()) {
+          return res.status(400).json({ error: 'This code has expired. Please request a new code.' });
+        }
+        if (String(row.otp_code).trim() === cleanCode) {
+          await activeAdmin.from('user_otps').update({ verified: true }).eq('id', row.id);
+          return res.json({ success: true, verified: true });
+        }
+      }
+    }
+
+    return res.status(400).json({ error: 'Incorrect code. Please check and try again.' });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Failed to send OTP email' });
+    console.error('[verify-otp] error:', err.message || err);
+    return res.status(500).json({ error: err.message || 'Failed to verify OTP' });
   }
 });
 

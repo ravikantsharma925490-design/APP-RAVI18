@@ -354,73 +354,72 @@ export function useAuth() {
       const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
 
       const cleanEmail = email.trim().toLowerCase();
-      const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
 
-      // Generate OTP entry in user_otps table on signUp
+      let createdUserId: string | null = null;
+      let usedServerApi = false;
+
       try {
-        const { error: insError } = await supabase.from('user_otps').insert([
-          {
+        const createRes = await fetch('/api/auth/create-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             email: cleanEmail,
-            otp_code: generatedCode,
-            type: 'signup',
-            expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-            verified: false
-          }
-        ]);
-        if (insError) {
-          console.warn('user_otps signup insert error:', insError);
-        }
-      } catch (otpTableErr) {
-        console.warn('user_otps signup insert notice:', otpTableErr);
-      }
-
-      // Trigger OTP email delivery via backend SMTP if configured
-      fetch('/api/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, otpCode: generatedCode }),
-      }).catch(() => {});
-
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          emailRedirectTo: origin,
-          data: {
-            display_name: displayName.trim() || cleanUsername,
+            password,
+            displayName: displayName.trim() || cleanUsername,
             username: cleanUsername,
             country: country || 'India',
-            custom_otp: generatedCode,
-          },
-        },
-      });
-
-      if (error) throw error;
-
-      if (data.user) {
+          }),
+        });
+        
+        const rawText = await createRes.text();
+        let createResult: any = {};
         try {
-          // Create or ensure profile row with exact user-chosen username & country
-          const newProfile: Partial<Profile> = {
-            id: data.user.id,
-            username: cleanUsername,
-            display_name: displayName.trim() || cleanUsername,
-            country: country || 'India',
-            bio: 'Hey there! I am using LiveConnect.',
-            is_online: true,
-            last_seen: new Date().toISOString(),
-          };
+          createResult = rawText ? JSON.parse(rawText) : {};
+        } catch (e) {
+          console.warn('create-account parse notice:', e);
+        }
 
-          await supabase.from('profiles').upsert(newProfile);
-          if (data.session) {
-            await fetchProfile(data.user.id, data.user);
-          }
-        } catch (profileErr: any) {
-          console.warn('Profile creation notice:', profileErr.message);
+        if (createRes.ok && createResult.success) {
+          createdUserId = createResult.userId;
+          usedServerApi = true;
+        } else if (createResult.error && createResult.error !== 'FALLBACK_CLIENT_SIGNUP') {
+          throw new Error(createResult.error);
+        }
+      } catch (srvErr: any) {
+        if (srvErr.message && !srvErr.message.includes('FALLBACK_CLIENT_SIGNUP')) {
+          throw srvErr;
         }
       }
 
-      return data;
+      if (!usedServerApi) {
+        // Fallback to client-side Supabase signUp if Admin API service role key is not configured
+        const { data, error } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+          options: {
+            emailRedirectTo: origin,
+            data: {
+              display_name: displayName.trim() || cleanUsername,
+              username: cleanUsername,
+              country: country || 'India',
+            },
+          },
+        });
+        if (error) throw error;
+        createdUserId = data.user?.id || null;
+      }
+
+      try {
+        await fetch('/api/auth/send-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail, type: 'signup' }),
+        });
+      } catch (err) {
+        console.warn('Server OTP request notice:', err);
+      }
+
+      return { user: { id: createdUserId, email: cleanEmail } };
     } catch (err: any) {
       let msg = err.message || 'Failed to create account';
       if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
@@ -451,55 +450,29 @@ export function useAuth() {
     const supabase = getSupabase();
     try {
       const cleanEmail = email.trim().toLowerCase();
-      const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-      // 1. Try RPC function
+      // Delegate OTP generation, DB insertion, and email dispatch to backend server
       try {
-        await supabase.rpc('generate_custom_otp', {
-          p_email: cleanEmail,
-          p_type: 'login'
+        await fetch('/api/auth/send-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail, type: 'login' }),
         });
-      } catch (e) {
-        // Fallback to direct table insertion
+      } catch (err) {
+        console.warn('Server login OTP request notice:', err);
       }
-
-      // 2. Guaranteed Direct Insert into user_otps table so user sees row in Supabase Table Editor
-      try {
-        const { error: loginInsErr } = await supabase.from('user_otps').insert([
-          {
-            email: cleanEmail,
-            otp_code: generatedCode,
-            type: 'login',
-            expires_at: expiresAt,
-            verified: false
-          }
-        ]);
-        if (loginInsErr) {
-          console.warn('user_otps login insert error:', loginInsErr);
-        }
-      } catch (insertErr) {
-        console.warn('user_otps table insert notice:', insertErr);
-      }
-
-      // Trigger OTP email delivery via backend SMTP if configured
-      fetch('/api/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, otpCode: generatedCode }),
-      }).catch(() => {});
 
       const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
-      const { error } = await supabase.auth.signInWithOtp({
-        email: cleanEmail,
-        options: {
-          emailRedirectTo: origin,
-          data: {
-            custom_otp: generatedCode,
+      try {
+        await supabase.auth.signInWithOtp({
+          email: cleanEmail,
+          options: {
+            emailRedirectTo: origin,
           },
-        },
-      });
-      if (error) throw error;
+        });
+      } catch (sErr) {
+        console.warn('Supabase native OTP notice:', sErr);
+      }
     } catch (err: any) {
       setAuthError(err.message || 'Failed to send OTP code');
       throw err;
@@ -516,6 +489,7 @@ export function useAuth() {
     }
 
     const supabase = getSupabase();
+    setAuthError(null);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -529,10 +503,17 @@ export function useAuth() {
       return data;
     } catch (err: any) {
       let msg = err.message || 'Failed to sign in';
-      if (msg.includes('Invalid login credentials')) {
-        msg = 'Invalid email or password. If you just signed up, please check your email inbox to verify your account or disable email verification in Supabase.';
-      } else if (msg.includes('Email not confirmed')) {
-        msg = 'Please confirm your email address via the link sent to your inbox before signing in, or disable "Confirm email" in Supabase Auth settings.';
+      if (msg.includes('Email not confirmed')) {
+        // Clear scary error and trigger smooth OTP sending
+        setAuthError(null);
+        try {
+          await sendLoginOtp(email.trim());
+        } catch (otpErr) {
+          // ignore
+        }
+        throw new Error('EMAIL_NOT_CONFIRMED_OTP_SENT');
+      } else if (msg.includes('Invalid login credentials')) {
+        msg = 'Invalid email or password. Please check your credentials and try again.';
       } else if (msg.includes('Failed to fetch')) {
         msg = 'Unable to reach Supabase. Please verify your Supabase URL in Settings.';
       }

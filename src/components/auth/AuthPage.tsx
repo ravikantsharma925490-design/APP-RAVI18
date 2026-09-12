@@ -90,6 +90,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   // OTP Verification States
   const [otpCode, setOtpCode] = useState('');
   const [pendingVerifyEmail, setPendingVerifyEmail] = useState('');
+  const [pendingSignupPassword, setPendingSignupPassword] = useState('');
   const [otpError, setOtpError] = useState<string | null>(null);
 
   // Terms & Privacy Agreement State
@@ -215,16 +216,24 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
     try {
       if (mode === 'login') {
-        await onSignIn(email, password);
+        try {
+          await onSignIn(email, password);
+        } catch (signInErr: any) {
+          if (signInErr?.message === 'EMAIL_NOT_CONFIRMED_OTP_SENT') {
+            setPendingVerifyEmail(email.trim());
+            setMode('verify-otp');
+            clearError();
+            setSuccessMessage('An OTP verification code was sent to your email!');
+          }
+        }
       } else if (mode === 'signup') {
         const clean = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-        const res = await onSignUp(email, password, displayName, clean, country);
-        if (res?.session) {
-          setSuccessMessage('Account created! Logging you in...');
-        } else {
-          setPendingVerifyEmail(email.trim());
-          setMode('verify-otp');
-        }
+        await onSignUp(email, password, displayName, clean, country);
+        setPendingVerifyEmail(email.trim());
+        setPendingSignupPassword(password);
+        setMode('verify-otp');
+        clearError();
+        setSuccessMessage('Account created! A 6-digit verification code was sent to your email.');
       } else if (mode === 'forgot') {
         await onResetPassword(email);
         setResetSent(true);
@@ -326,24 +335,40 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       const cleanCode = otpCode.trim();
       const nowIso = new Date().toISOString();
 
-      // 1. First check user_otps database table for ANY valid unexpired 5-minute code
+      // 1. First check server API & user_otps database table for ANY valid unexpired code
       try {
-        const { data: rows } = await supabase
-          .from('user_otps')
-          .select('*')
-          .ilike('email', cleanEmail)
-          .gt('expires_at', nowIso);
-
-        if (rows && rows.length > 0) {
-          const match = rows.find((r: any) => r.otp_code === cleanCode && r.verified !== true);
-          if (match) {
+        const apiRes = await fetch('/api/auth/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail, otpCode: cleanCode }),
+        });
+        if (apiRes.ok) {
+          const apiJson = await apiRes.json();
+          if (apiJson.verified) {
             verifiedSession = { user: { email: cleanEmail } };
-            try {
-              await supabase.from('user_otps').update({ verified: true }).eq('id', match.id);
-            } catch (uErr) { /* ignore */ }
           }
         }
-      } catch (dbErr) { /* ignore */ }
+      } catch (apiErr) { /* ignore */ }
+
+      if (!verifiedSession) {
+        try {
+          const { data: rows } = await supabase
+            .from('user_otps')
+            .select('*')
+            .ilike('email', cleanEmail)
+            .gt('expires_at', nowIso);
+
+          if (rows && rows.length > 0) {
+            const match = rows.find((r: any) => r.otp_code === cleanCode && r.verified !== true);
+            if (match) {
+              verifiedSession = { user: { email: cleanEmail } };
+              try {
+                await supabase.from('user_otps').update({ verified: true }).eq('id', match.id);
+              } catch (uErr) { /* ignore */ }
+            }
+          }
+        } catch (dbErr) { /* ignore */ }
+      }
 
       // 2. If not verified via user_otps table, check native Supabase verifyOtp
       if (!verifiedSession) {
@@ -382,6 +407,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         throw lastError || new Error('Invalid or expired OTP code. Please request a new OTP.');
       }
 
+      if (pendingSignupPassword) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: pendingVerifyEmail,
+          password: pendingSignupPassword,
+        });
+        if (signInError) throw signInError;
+      }
+
       setSuccessMessage('OTP code verified! Logging you in...');
       setTimeout(() => {
         window.location.reload();
@@ -395,17 +428,24 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
   const handleResendOtp = async () => {
     setOtpError(null);
+    setLoading(true);
     try {
-      const supabase = (await import('@/src/lib/supabase/client')).getSupabase();
-      if (!supabase) throw new Error('Database client unavailable');
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: pendingVerifyEmail,
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingVerifyEmail, type: 'signup' }),
       });
-      if (error) throw error;
-      setSuccessMessage('A new code has been sent to your email.');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not resend code.');
+      if (data.otpCode) {
+        setSuccessMessage(`Fresh verification code generated! ${data.emailSent ? 'Sent to your Gmail.' : 'Your Code: ' + data.otpCode}`);
+      } else {
+        setSuccessMessage('A fresh 6-digit verification code has been sent to your email!');
+      }
     } catch (err: any) {
       setOtpError(err.message || 'Could not resend code.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -481,13 +521,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         )}
 
         {/* Error & Success Messages */}
-        {authError && (
+        {authError && mode !== 'verify-otp' && (
           <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs leading-relaxed animate-in fade-in space-y-2">
             <div>{authError}</div>
-            {(authError.toLowerCase().includes('trigger') ||
-              authError.toLowerCase().includes('database') ||
-              authError.toLowerCase().includes('settings') ||
-              authError.toLowerCase().includes('supabase')) && (
+            {(authError.toLowerCase().includes('relation') ||
+              authError.toLowerCase().includes('function') ||
+              authError.toLowerCase().includes('trigger') ||
+              authError.toLowerCase().includes('column')) && (
               <button
                 type="button"
                 onClick={onOpenConfig}
