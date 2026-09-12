@@ -383,12 +383,10 @@ export function useAuth() {
           createdUserId = createResult.userId;
           usedServerApi = true;
         } else if (createResult.error && createResult.error !== 'FALLBACK_CLIENT_SIGNUP') {
-          throw new Error(createResult.error);
+          console.warn('Server create-account notice:', createResult.error);
         }
       } catch (srvErr: any) {
-        if (srvErr.message && !srvErr.message.includes('FALLBACK_CLIENT_SIGNUP')) {
-          throw srvErr;
-        }
+        console.warn('Server API create-account unavailable, using client fallback:', srvErr.message);
       }
 
       if (!usedServerApi) {
@@ -422,7 +420,7 @@ export function useAuth() {
       return { user: { id: createdUserId, email: cleanEmail } };
     } catch (err: any) {
       let msg = err.message || 'Failed to create account';
-      if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+      if (msg.includes('Failed to fetch') || msg.includes('fetch failed') || msg.includes('NetworkError')) {
         msg = 'Network connection failed. Please check your Supabase Project URL in Settings.';
       } else if (msg.includes('Invalid API key') || msg.includes('JWT')) {
         msg = 'Invalid Supabase Anon Key. Please check the key in Settings & Configuration.';
