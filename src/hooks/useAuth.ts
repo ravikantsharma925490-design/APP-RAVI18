@@ -299,6 +299,24 @@ export function useAuth() {
 
       if (newSession?.user) {
         await fetchProfile(newSession.user.id, newSession.user);
+
+        if (event === 'SIGNED_IN') {
+          try {
+            await fetch('/api/auth/notify-login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: newSession.user.email,
+                displayName:
+                  newSession.user.user_metadata?.display_name ||
+                  newSession.user.user_metadata?.full_name ||
+                  newSession.user.email,
+              }),
+            });
+          } catch (notifyErr) {
+            console.warn('Login notification notice:', notifyErr);
+          }
+        }
       } else {
         updateProfileState(null);
       }
