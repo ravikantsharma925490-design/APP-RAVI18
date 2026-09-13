@@ -11,6 +11,34 @@
     <meta name="format-detection" content="telephone=no" />
     <title>LiveConnect - Real-Time Chat & Video Calls</title>
     <meta name="description" content="One-to-one real-time messaging, audio, and video calling powered by Supabase and LiveKit." />
+    <script>
+      (function() {
+        if (typeof window !== 'undefined') {
+          try {
+            var nativeFetch = window.fetch ? window.fetch.bind(window) : undefined;
+            var currentFetch = nativeFetch;
+            var defineOn = function(obj) {
+              try {
+                Object.defineProperty(obj, 'fetch', {
+                  get: function() { return currentFetch || nativeFetch; },
+                  set: function(fn) { currentFetch = fn || nativeFetch; },
+                  configurable: true,
+                  enumerable: true
+                });
+                return true;
+              } catch (e) {
+                return false;
+              }
+            };
+            if (!defineOn(window) && Object.getPrototypeOf(window)) {
+              defineOn(Object.getPrototypeOf(window));
+            }
+          } catch (err) {
+            console.warn('Fetch setter setup error:', err);
+          }
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

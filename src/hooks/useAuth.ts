@@ -739,10 +739,13 @@ export function useAuth() {
     const supabase = getSupabase();
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: origin,
+          skipBrowserRedirect: isInIframe,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -750,11 +753,29 @@ export function useAuth() {
         },
       });
       if (error) throw error;
+
+      if (isInIframe && data?.url) {
+        const popup = window.open(data.url, '_blank', 'width=500,height=600');
+        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+          try {
+            window.top!.location.href = data.url;
+          } catch (e) {
+            window.location.href = data.url;
+          }
+        }
+      }
+
       return data;
     } catch (err: any) {
       let msg = err.message || 'Failed to sign in with Google';
-      if (msg.toLowerCase().includes('provider is not enabled') || msg.toLowerCase().includes('unsupported provider')) {
-        msg = 'Google Sign-In is not enabled in your Supabase Dashboard. Please enable Google provider under Authentication -> Providers in Supabase.';
+      if (
+        msg.toLowerCase().includes('provider is not enabled') ||
+        msg.toLowerCase().includes('unsupported provider') ||
+        msg.toLowerCase().includes('provider is disabled')
+      ) {
+        msg = 'Google Sign-In Supabase mein enabled nahi hai. Kripya Supabase Dashboard (Authentication -> Providers -> Google) mein Client ID & Secret enable karein.';
+      } else if (msg.toLowerCase().includes('redirect_uri_mismatch')) {
+        msg = 'Google OAuth Redirect URI mismatch. Kripya Supabase URL (https://slvojojyssepcarxlmfd.supabase.co/auth/v1/callback) Google Cloud Console mein add karein.';
       }
       setAuthError(msg);
       throw new Error(msg);

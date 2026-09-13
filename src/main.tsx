@@ -25,7 +25,10 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   render() {
-    if (this.state.hasError) {
+    const state = (this as any).state as ErrorBoundaryState;
+    const props = (this as any).props as ErrorBoundaryProps;
+
+    if (state?.hasError) {
       return (
         <div className="min-h-screen w-full flex flex-col items-center justify-center bg-neutral-950 text-white p-6 font-sans">
           <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-2xl p-6 text-center space-y-4 shadow-xl">
@@ -34,7 +37,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
             </div>
             <h2 className="text-xl font-bold text-white">Something went wrong</h2>
             <p className="text-xs text-neutral-400 bg-neutral-950 p-3 rounded-lg border border-neutral-800 font-mono overflow-auto max-h-32 text-left">
-              {this.state.error?.message || 'An unexpected error occurred.'}
+              {state.error?.message || 'An unexpected error occurred.'}
             </p>
             <button
               onClick={() => {
@@ -48,7 +51,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
         </div>
       );
     }
-    return (this.props as any).children;
+    return props.children;
   }
 }
 

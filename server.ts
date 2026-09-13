@@ -265,6 +265,21 @@ if (!rawUrl || (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://'))
 }
 const SUPABASE_URL = rawUrl;
 
+// Safe wrapper for Supabase client creation to guarantee valid URL
+function safeCreateClient(url: string, key: string, options?: any) {
+  let cleanUrl = (url || '').trim();
+  if (!cleanUrl || (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) || cleanUrl.includes('placeholder')) {
+    cleanUrl = extractUrlFromJwt(key) || 'https://slvojojyssepcarxlmfd.supabase.co';
+  }
+  const cleanKey = (key || '').trim() || DEFAULT_SUPABASE_ANON_KEY;
+  try {
+    return createClient(cleanUrl, cleanKey, options);
+  } catch (err) {
+    console.warn('[Supabase] Client init fallback:', err);
+    return createClient('https://slvojojyssepcarxlmfd.supabase.co', cleanKey, options);
+  }
+}
+
 // Standard Supabase client (Uses ANON KEY for public/regular ops)
 let serverSupabase: any = null;
 // Dedicated Admin Supabase client (Uses SERVICE ROLE KEY strictly for OTP, Ban, and Account Deletion)
@@ -272,10 +287,10 @@ let adminSupabase: any = null;
 
 try {
   if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-    serverSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    serverSupabase = safeCreateClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
     const adminKey = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
-    adminSupabase = createClient(SUPABASE_URL, adminKey, {
+    adminSupabase = safeCreateClient(SUPABASE_URL, adminKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
@@ -653,7 +668,7 @@ app.post('/api/auth/check-username', async (req, res) => {
     let activeClient = serverSupabase;
     if (supabaseUrl && supabaseAnonKey && (supabaseUrl !== SUPABASE_URL || supabaseAnonKey !== SUPABASE_ANON_KEY)) {
       try {
-        activeClient = createClient(supabaseUrl, supabaseAnonKey);
+        activeClient = safeCreateClient(supabaseUrl, supabaseAnonKey);
       } catch (err) {
         // fallback
       }
@@ -1468,7 +1483,7 @@ app.post('/api/auth/create-account', async (req, res) => {
       });
     }
 
-    const adminClient = createClient(SUPABASE_URL, serviceKey, {
+    const adminClient = safeCreateClient(SUPABASE_URL, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
@@ -1576,7 +1591,7 @@ app.post('/api/auth/confirm-user', async (req, res) => {
     ).trim();
 
     if (serviceKey && SUPABASE_URL) {
-      const adminClient = createClient(SUPABASE_URL, serviceKey, {
+      const adminClient = safeCreateClient(SUPABASE_URL, serviceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
       });
 
@@ -1745,6 +1760,70 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   } catch (err: any) {
     console.error('[verify-otp] error:', err.message || err);
     return res.status(500).json({ error: err.message || 'Failed to verify OTP' });
+  }
+});
+
+// 4e. Notify Login Endpoint
+app.post('/api/auth/notify-login', async (req, res) => {
+  try {
+    const { email, name: rawName, displayName } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'email is required' });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const name = String(rawName || displayName || cleanEmail.split('@')[0]).trim();
+
+    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const port = parseInt(process.env.SMTP_PORT || '587', 10);
+    const user = process.env.SMTP_USER || process.env.GMAIL_USER;
+    const pass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
+
+    if (!user || !pass) {
+      console.warn('[Notify Login] Missing SMTP_USER or SMTP_PASS environment variables');
+      return res.json({ success: false, message: 'SMTP credentials not configured' });
+    }
+
+    const isGmail = host.includes('gmail.com') || user.endsWith('@gmail.com');
+    const transporter = nodemailer.createTransport(
+      isGmail
+        ? {
+            service: 'gmail',
+            auth: { user, pass },
+            tls: { rejectUnauthorized: false },
+          }
+        : {
+            host,
+            port,
+            secure: port === 465,
+            auth: { user, pass },
+            tls: { rejectUnauthorized: false },
+          }
+    );
+
+    await transporter.sendMail({
+      from: `"LiveConnect Security" <${user}>`,
+      to: cleanEmail,
+      subject: `🔒 New Sign-in Notification - LiveConnect`,
+      html: `
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background-color: #0a0a0a; border-radius: 16px;">
+      <h2 style="color: #ffffff; font-size: 22px; margin-bottom: 20px;">LiveConnect</h2>
+      <p style="color: #a3a3a3; font-size: 15px; margin-bottom: 20px;">🔒 New sign-in to your account:</p>
+      <div style="background-color: #171717; border: 1px solid #262626; border-radius: 12px; padding: 20px;">
+        <p style="color: #737373; font-size: 13px; margin: 0 0 6px 0;">Name</p>
+        <p style="color: #ffffff; font-size: 16px; font-weight: bold; margin: 0 0 16px 0;">${name} ✅</p>
+        <p style="color: #737373; font-size: 13px; margin: 0 0 6px 0;">Email</p>
+        <p style="color: #ffffff; font-size: 16px; font-weight: bold; margin: 0;">${cleanEmail}</p>
+      </div>
+      <p style="color: #525252; font-size: 11px; text-align: center; margin-top: 24px;">© 2026 LiveConnect</p>
+    </div>
+  `,
+    });
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.warn('[Notify Login] Error sending notification email:', err.message || err);
+    return res.status(500).json({ error: err.message || 'Failed to send notification email' });
   }
 });
 

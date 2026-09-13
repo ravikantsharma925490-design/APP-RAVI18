@@ -88,9 +88,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  const handleGoogleAuth = async () => {
+  const [googleError, setGoogleError] = useState<string | null>(null);
+
+  const handleGoogleSignIn = async () => {
     clearError();
-    setGoogleLoading(true);
+    setGoogleError(null);
+
+    if (!agreedTerms) {
+      setGoogleError('Please agree to the Terms of Use and Privacy Policy to continue.');
+      return;
+    }
+
+    setLoading(true);
     try {
       if (onGoogleSignIn) {
         await onGoogleSignIn();
@@ -98,20 +107,51 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         const supabase = (await import('@/src/lib/supabase/client')).getSupabase();
         if (!supabase) throw new Error('Database client unavailable');
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
-        const { error } = await supabase.auth.signInWithOAuth({
+        const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
+
+        const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
             redirectTo: origin,
-            queryParams: { access_type: 'offline', prompt: 'consent' },
+            skipBrowserRedirect: isInIframe,
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
           },
         });
         if (error) throw error;
+
+        if (isInIframe && data?.url) {
+          const popup = window.open(data.url, '_blank', 'width=500,height=600');
+          if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+            try {
+              window.top!.location.href = data.url;
+            } catch (e) {
+              window.location.href = data.url;
+            }
+          }
+        }
       }
     } catch (err: any) {
-      // Error handled in parent hook
+      const msg = err?.message || String(err);
+      console.error('Google Sign In Error:', err);
+      if (
+        msg.toLowerCase().includes('provider is not enabled') ||
+        msg.toLowerCase().includes('unsupported provider') ||
+        msg.toLowerCase().includes('provider is disabled')
+      ) {
+        setGoogleError('Google Sign-In Supabase mein enabled nahi hai. Supabase Dashboard (Authentication -> Providers -> Google) mein Client ID & Secret enable karein.');
+      } else {
+        setGoogleError(msg);
+      }
     } finally {
-      setGoogleLoading(false);
+      setLoading(false);
     }
+  };
+
+  const handleGoogleAuth = async () => {
+    await handleGoogleSignIn();
   };
   const [resetSent, setResetSent] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -542,7 +582,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           </p>
         </div>
 
-        {/* Tab Switcher */}
+        {/* Tab Switcher (Sign In vs Sign Up) */}
         {mode !== 'forgot' && mode !== 'verify-otp' && (
           <div className="grid grid-cols-2 p-1 rounded-xl bg-neutral-800/80 border border-neutral-700/60 text-xs font-semibold">
             <button
@@ -577,10 +617,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         )}
 
         {/* Error & Success Messages */}
-        {authError && mode !== 'verify-otp' && (
+        {(authError || googleError) && mode !== 'verify-otp' && (
           <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs leading-relaxed animate-in fade-in space-y-2">
-            <div>{authError}</div>
-            {(authError.toLowerCase().includes('relation') ||
+            <div>{googleError || authError}</div>
+            {authError && (authError.toLowerCase().includes('relation') ||
               authError.toLowerCase().includes('function') ||
               authError.toLowerCase().includes('trigger') ||
               authError.toLowerCase().includes('column')) && (
@@ -601,372 +641,87 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           </div>
         )}
 
-        {/* Form */}
+        {/* Main Clean Card Container */}
         {mode !== 'verify-otp' && (
-          <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === 'signup' && (
-            <>
-              {/* Full Display Name */}
-              <div>
-                <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-                  Display Name / Full Name
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter your full name"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white placeholder-neutral-500 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Custom Unique Username */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-medium text-neutral-300">
-                    Unique Username
-                  </label>
-                  <span className="text-[10px] text-neutral-400 font-mono">
-                    letters, numbers, _
-                  </span>
-                </div>
-                <div className="relative">
-                  <AtSign className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    required
-                    pattern="^[a-zA-Z0-9_]{3,}$"
-                    title="At least 3 characters. Only letters, numbers, and underscores."
-                    placeholder="Enter unique username (min 3 chars)"
-                    value={username}
-                    onChange={(e) =>
-                      setUsername(
-                        e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')
-                      )
-                    }
-                    className={`w-full pl-10 pr-10 py-2.5 rounded-xl bg-neutral-800/80 border text-white placeholder-neutral-500 text-base focus:outline-none focus:ring-2 font-mono transition-all ${
-                      usernameStatus === 'available'
-                        ? 'border-emerald-500/60 focus:ring-emerald-500'
-                        : usernameStatus === 'taken'
-                        ? 'border-red-500/60 focus:ring-red-500'
-                        : 'border-neutral-700 focus:ring-blue-500'
-                    }`}
-                  />
-                  {/* Status icon inside input */}
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                    {usernameStatus === 'checking' && (
-                      <Loader2 className="w-4 h-4 text-neutral-400 animate-spin" />
-                    )}
-                    {usernameStatus === 'available' && (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    )}
-                    {usernameStatus === 'taken' && (
-                      <XCircle className="w-4 h-4 text-red-400" />
-                    )}
-                  </div>
-                </div>
-
-                {/* Real-time username feedback text */}
-                {usernameFeedback && (
-                  <p
-                    className={`text-[11px] mt-1 pl-1 font-medium transition-all ${
-                      usernameStatus === 'available'
-                        ? 'text-emerald-400'
-                        : usernameStatus === 'taken'
-                        ? 'text-red-400'
-                        : usernameStatus === 'invalid'
-                        ? 'text-amber-400'
-                        : 'text-neutral-400'
-                    }`}
-                  >
-                    {usernameFeedback}
-                  </p>
-                )}
-              </div>
-
-              {/* Country Selection Dropdown */}
-              <div className="relative" ref={countryDropdownRef}>
-                <label className="block text-xs font-medium text-neutral-300 mb-1.5 flex items-center justify-between">
-                  <span>Country / Region</span>
-                  <span className="text-[10px] text-neutral-400">
-                    {selectedCountryObj.dialCode}
-                  </span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setIsCountryOpen((prev) => !prev)}
-                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-neutral-800/80 border border-neutral-700 hover:border-neutral-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-lg leading-none shrink-0">
-                      {selectedCountryObj.flag}
-                    </span>
-                    <span className="truncate text-neutral-100 font-medium text-xs md:text-sm">
-                      {selectedCountryObj.name}
-                    </span>
-                    <span className="text-[11px] text-neutral-400 font-mono shrink-0">
-                      ({selectedCountryObj.code})
-                    </span>
-                  </div>
-                  <ChevronDown
-                    className={`w-4 h-4 text-neutral-400 transition-transform shrink-0 ml-2 ${
-                      isCountryOpen ? 'rotate-180 text-blue-400' : ''
-                    }`}
-                  />
-                </button>
-
-                {/* Country Picker Flyout */}
-                {isCountryOpen && (
-                  <div className="absolute left-0 right-0 top-full mt-1.5 max-h-64 bg-neutral-900 border border-neutral-700/80 rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col backdrop-blur-xl animate-in fade-in zoom-in-95">
-                    {/* Search bar inside country dropdown */}
-                    <div className="p-2 border-b border-neutral-800 bg-neutral-950/60 sticky top-0 z-10">
-                      <div className="relative">
-                        <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          autoFocus
-                          placeholder="Search country or dial code..."
-                          value={countrySearch}
-                          onChange={(e) => setCountrySearch(e.target.value)}
-                          className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-neutral-800 border border-neutral-700 text-base text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Scrollable list of 195+ countries */}
-                    <div className="overflow-y-auto max-h-48 divide-y divide-neutral-800/40 overscroll-contain">
-                      {filteredCountries.length === 0 ? (
-                        <div className="p-4 text-center text-xs text-neutral-500">
-                          No country matched "{countrySearch}"
-                        </div>
-                      ) : (
-                        filteredCountries.map((c) => {
-                          const isSelected =
-                            c.name.toLowerCase() === country.toLowerCase() ||
-                            c.code.toLowerCase() === country.toLowerCase();
-                          return (
-                            <button
-                              key={c.code}
-                              type="button"
-                              onClick={() => {
-                                setCountry(c.name);
-                                setIsCountryOpen(false);
-                                setCountrySearch('');
-                              }}
-                              className={`w-full flex items-center justify-between px-3.5 py-2 text-xs text-left hover:bg-neutral-800/80 transition-colors cursor-pointer ${
-                                isSelected
-                                  ? 'bg-blue-600/15 text-blue-300 font-semibold'
-                                  : 'text-neutral-300'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5 truncate">
-                                <span className="text-base leading-none">
-                                  {c.flag}
-                                </span>
-                                <span className="truncate">{c.name}</span>
-                                <span className="text-[10px] text-neutral-500 font-mono">
-                                  {c.dialCode}
-                                </span>
-                              </div>
-                              {isSelected && (
-                                <Check className="w-3.5 h-3.5 text-blue-400 shrink-0 ml-2" />
-                              )}
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
-          <div>
-            <label className="block text-xs font-medium text-neutral-300 mb-1.5">
-              Email Address
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="email"
-                required
-                placeholder="you@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white placeholder-neutral-500 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              />
-            </div>
-          </div>
-
-          {mode !== 'forgot' && (
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-medium text-neutral-300">
-                  Password
-                </label>
-                {mode === 'login' && (
+          <div className="space-y-4">
+            {/* Terms & Privacy Agreement Checkbox */}
+            <div className="p-3 rounded-2xl bg-neutral-800/50 border border-neutral-700/80 hover:border-neutral-600 transition-all">
+              <label className="flex items-start gap-2.5 cursor-pointer group select-none">
+                <input
+                  type="checkbox"
+                  checked={agreedTerms}
+                  onChange={(e) => setAgreedTerms(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-neutral-600 bg-neutral-900 text-blue-500 focus:ring-blue-500 focus:ring-offset-neutral-900 cursor-pointer transition-all"
+                />
+                <span className="text-xs text-neutral-300 group-hover:text-white leading-relaxed">
+                  I agree to the{' '}
                   <button
                     type="button"
-                    onClick={() => {
-                      setMode('forgot');
-                      clearError();
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLegalDocModal({ isOpen: true, tab: 'terms' });
                     }}
-                    className="text-xs text-blue-400 hover:underline cursor-pointer"
+                    className="text-blue-400 font-semibold underline hover:text-blue-300 cursor-pointer"
                   >
-                    Forgot password?
+                    Terms of Use
+                  </button>{' '}
+                  and{' '}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLegalDocModal({ isOpen: true, tab: 'privacy' });
+                    }}
+                    className="text-blue-400 font-semibold underline hover:text-blue-300 cursor-pointer"
+                  >
+                    Privacy Policy
                   </button>
-                )}
-              </div>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white placeholder-neutral-500 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Terms & Privacy Policy Checkbox (Required for both Login and Signup) */}
-          {mode !== 'forgot' && (
-            <div className="pt-2">
-              <div className="p-3 rounded-2xl bg-neutral-800/50 border border-neutral-700/80 hover:border-neutral-600 transition-all">
-                <label className="flex items-start gap-2.5 cursor-pointer group select-none">
-                  <input
-                    type="checkbox"
-                    checked={agreedTerms}
-                    onChange={(e) => setAgreedTerms(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-neutral-600 bg-neutral-900 text-blue-500 focus:ring-blue-500 focus:ring-offset-neutral-900 cursor-pointer transition-all"
-                  />
-                  <span className="text-xs text-neutral-300 group-hover:text-white leading-relaxed">
-                    I agree to the{' '}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLegalDocModal({ isOpen: true, tab: 'terms' });
-                      }}
-                      className="text-blue-400 font-semibold underline hover:text-blue-300 cursor-pointer"
-                    >
-                      Terms of Use
-                    </button>{' '}
-                    and{' '}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLegalDocModal({ isOpen: true, tab: 'privacy' });
-                      }}
-                      className="text-blue-400 font-semibold underline hover:text-blue-300 cursor-pointer"
-                    >
-                      Privacy Policy
-                    </button>
-                  </span>
-                </label>
-              </div>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={
-              loading ||
-              (mode === 'signup' && (usernameStatus === 'taken' || usernameStatus === 'checking'))
-            }
-            className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 mt-2 cursor-pointer"
-          >
-            {loading ? (
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <>
-                <span>
-                  {mode === 'login' && 'Sign In'}
-                  {mode === 'signup' && 'Create Account'}
-                  {mode === 'forgot' && 'Send Reset Link'}
                 </span>
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
-          </button>
-
-          {/* Form end */}
-        </form>
-        )}
-
-        {/* Google Sign-In Divider & Button */}
-        {mode !== 'verify-otp' && mode !== 'forgot' && (
-          <div className="space-y-3.5 pt-1">
-            <div className="relative flex items-center justify-center">
-              <div className="border-t border-neutral-700/60 w-full"></div>
-              <span className="bg-neutral-900 px-3 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider shrink-0">
-                Or continue with
-              </span>
-              <div className="border-t border-neutral-700/60 w-full"></div>
+              </label>
             </div>
 
+            {/* Google Sign-In Primary Action */}
             <button
               type="button"
-              onClick={handleGoogleAuth}
-              disabled={googleLoading || loading}
-              className="w-full py-2.5 px-4 rounded-xl bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 hover:border-neutral-600 text-white font-medium text-xs transition-all flex items-center justify-center gap-2.5 cursor-pointer shadow-sm disabled:opacity-50 hover:scale-[1.01] active:scale-[0.99]"
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-3 bg-white hover:bg-neutral-100 text-neutral-900 font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-white/10 disabled:opacity-50 transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99] mt-2"
             >
-              {googleLoading ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-neutral-800/30 border-t-neutral-800 rounded-full animate-spin" />
               ) : (
                 <>
-                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                    />
+                  <svg width="20" height="20" viewBox="0 0 48 48" className="shrink-0">
+                    <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12s5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24s8.955,20,20,20s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
+                    <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
+                    <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/>
+                    <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
                   </svg>
-                  <span className="font-semibold text-neutral-200">Continue with Google</span>
+                  <span className="text-sm font-bold">
+                    {mode === 'login' ? 'Continue with Google' : 'Sign Up with Google'}
+                  </span>
                 </>
               )}
             </button>
           </div>
         )}
 
-        {/* Verify OTP / Email Confirmation Mode */}
+        {/* Verify OTP Mode */}
         {mode === 'verify-otp' && (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
             <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-center space-y-2">
               <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center mx-auto text-lg font-bold">
                 ✉️
               </div>
-              <h3 className="text-sm font-semibold text-white">Check Your Gmail / Email Inbox</h3>
+              <h3 className="text-sm font-semibold text-white">Check Your Email Inbox</h3>
               <p className="text-xs text-neutral-300 leading-relaxed">
-                A confirmation link was sent to <span className="text-white font-medium">{pendingVerifyEmail}</span>.
-                <br />
-                <strong className="text-blue-400">Open your Gmail and click the link</strong> to verify your account & sign in automatically!
+                A verification code was sent to <span className="text-white font-medium">{pendingVerifyEmail}</span>.
               </p>
             </div>
 
             <div className="pt-1">
               <p className="text-xs text-neutral-400 text-center mb-2">
-                Or enter 6-digit verification code if present in your email:
+                Enter 6-digit verification code:
               </p>
               <input
                 type="text"
@@ -980,7 +735,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             </div>
 
             {otpError && (
-              <p className="text-sm text-red-400 text-center font-medium">{otpError}</p>
+              <p className="text-xs text-red-400 text-center font-medium">{otpError}</p>
             )}
 
             <button
@@ -1001,7 +756,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 onClick={handleResendOtp}
                 className="text-blue-400 hover:underline font-semibold cursor-pointer"
               >
-                Resend Link / Code
+                Resend Code
               </button>
               <button
                 type="button"
@@ -1018,24 +773,24 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           </form>
         )}
 
-        {/* Forgot Password options */}
+        {/* Forgot Password Mode */}
         {mode === 'forgot' && (
           <div className="space-y-4 pt-1">
-            {resetSent && (
+            {resetSent ? (
               <div className="space-y-3">
                 <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-center space-y-2">
                   <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center mx-auto text-lg font-bold">
                     🔑
                   </div>
-                  <h3 className="text-sm font-semibold text-white">Reset Link Sent to Gmail!</h3>
+                  <h3 className="text-sm font-semibold text-white">Reset Link Sent</h3>
                   <p className="text-xs text-neutral-300 leading-relaxed">
-                    Open your Gmail for <span className="text-white font-medium">{pendingVerifyEmail || email}</span> and <strong className="text-blue-400">click the password reset link</strong>.
+                    Password reset link sent to <span className="text-white font-medium">{pendingVerifyEmail || email}</span>.
                   </p>
                 </div>
 
                 <form onSubmit={handleVerifyRecoveryOtp} className="space-y-3 p-4 rounded-2xl bg-neutral-900/80 border border-neutral-800 shadow-inner">
                   <p className="text-xs text-neutral-400 text-center">
-                    Or if your email contains a 6-digit recovery code, enter it below:
+                    Or enter your 6-digit recovery code below:
                   </p>
                   <input
                     type="text"
@@ -1057,11 +812,42 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     {loading ? (
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     ) : (
-                      'Verify Code & Set New Password'
+                      'Verify Code & Set Password'
                     )}
                   </button>
                 </form>
               </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="you@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white placeholder-neutral-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+                >
+                  {loading ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    'Send Reset Link'
+                  )}
+                </button>
+              </form>
             )}
 
             <div className="text-center text-xs text-neutral-400">
