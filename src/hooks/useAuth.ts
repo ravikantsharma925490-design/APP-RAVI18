@@ -195,7 +195,6 @@ export function useAuth() {
       const supabase = getSupabase();
       const storedIntent =
         typeof window !== 'undefined' ? localStorage.getItem('auth_intent_mode') : null;
-      const intentMode = storedIntent || 'login';
 
       try {
         const { data, error } = await supabase
@@ -204,19 +203,12 @@ export function useAuth() {
           .eq('id', userId)
           .maybeSingle();
 
-        if (error || !data) {
+        const intentMode = storedIntent ? storedIntent : (data ? 'login' : 'signup');
+
+        if (!data || error) {
           // NO PROFILE EXISTS in 'profiles' database table!
-          if (intentMode === 'signup') {
-            // User clicked "Create Account / Sign Up" -> proceed to Onboarding screen!
-            if (currentUser) {
-              setOnboardingUser(currentUser);
-              setNeedsOnboarding(true);
-              if (typeof window !== 'undefined') {
-                localStorage.removeItem('auth_intent_mode');
-              }
-            }
-          } else {
-            // User clicked "Sign In", BUT account / profile does NOT exist!
+          if (intentMode === 'login' && storedIntent === 'login') {
+            // User specifically clicked "Sign In", BUT account / profile does NOT exist!
             console.warn('[useAuth] Sign-in attempt failed: Account does not exist in profiles table for user', userId);
             await supabase.auth.signOut();
             updateUserState(null);
@@ -227,29 +219,24 @@ export function useAuth() {
             if (typeof window !== 'undefined') {
               localStorage.removeItem('auth_intent_mode');
             }
+          } else {
+            // User clicked "Create Account / Sign Up" OR no intent flag -> proceed to Onboarding screen!
+            if (currentUser) {
+              setOnboardingUser(currentUser);
+              setNeedsOnboarding(true);
+              setAuthError(null);
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('auth_intent_mode');
+              }
+            }
           }
         } else {
-          // PROFILE ALREADY EXISTS in 'profiles' database table!
-          if (intentMode === 'signup') {
-            // User clicked "Create Account", but their account ALREADY exists!
-            console.warn('[useAuth] Sign-up attempt notice: Account already exists for user', userId);
-            await supabase.auth.signOut();
-            updateUserState(null);
-            updateProfileState(null);
-            setNeedsOnboarding(false);
-            setOnboardingUser(null);
-            setAuthError('Account already exists! Aapka account pehle se bana hua hai. Kripya "Sign In" tab se login karein.');
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem('auth_intent_mode');
-            }
-          } else {
-            // User clicked "Sign In" and profile exists -> Normal successful Sign In!
-            updateProfileState(data as Profile);
-            setNeedsOnboarding(false);
-            setAuthError(null);
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem('auth_intent_mode');
-            }
+          // PROFILE EXISTS in 'profiles' database table -> Log user in!
+          updateProfileState(data as Profile);
+          setNeedsOnboarding(false);
+          setAuthError(null);
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('auth_intent_mode');
           }
         }
       } catch (err: any) {
@@ -443,6 +430,10 @@ export function useAuth() {
       throw err;
     }
 
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('auth_intent_mode', 'signup');
+    }
+
     const supabase = getSupabase();
     const cleanEmail = email.trim().toLowerCase();
     try {
@@ -605,6 +596,9 @@ export function useAuth() {
 
   const signIn = async (email: string, password: string) => {
     setAuthError(null);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('auth_intent_mode', 'login');
+    }
     const { isConfigured } = getSupabaseConfig();
     if (!isConfigured) {
       const err = new Error('Supabase is not configured yet. Please click the Settings gear icon (top-right) to enter your Supabase URL & Anon Key.');

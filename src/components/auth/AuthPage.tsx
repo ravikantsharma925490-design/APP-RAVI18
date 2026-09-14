@@ -74,6 +74,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 }) => {
   const { currentLanguage, openLanguageModal, t } = useLanguage();
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'verify-otp'>('login');
+
+  const switchMode = (newMode: 'login' | 'signup' | 'forgot' | 'verify-otp') => {
+    setMode(newMode);
+    clearError();
+    if (typeof window !== 'undefined' && (newMode === 'login' || newMode === 'signup')) {
+      localStorage.setItem('auth_intent_mode', newMode);
+    }
+  };
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -270,6 +278,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const executeAuthAction = async () => {
     clearError();
     setSuccessMessage(null);
+
+    if (typeof window !== 'undefined' && (mode === 'login' || mode === 'signup')) {
+      localStorage.setItem('auth_intent_mode', mode);
+    }
 
     if (mode === 'signup') {
       const clean = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
@@ -591,10 +603,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           <div className="grid grid-cols-2 p-1 rounded-xl bg-neutral-800/80 border border-neutral-700/60 text-xs font-semibold">
             <button
               type="button"
-              onClick={() => {
-                setMode('login');
-                clearError();
-              }}
+              onClick={() => switchMode('login')}
               className={`py-2 rounded-lg transition-all cursor-pointer ${
                 mode === 'login'
                   ? 'bg-blue-600 text-white shadow-sm font-bold'
@@ -605,10 +614,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setMode('signup');
-                clearError();
-              }}
+              onClick={() => switchMode('signup')}
               className={`py-2 rounded-lg transition-all cursor-pointer ${
                 mode === 'signup'
                   ? 'bg-blue-600 text-white shadow-sm font-bold'
