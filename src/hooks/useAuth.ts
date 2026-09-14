@@ -567,8 +567,8 @@ export function useAuth() {
         msg = 'Network connection failed. Please check your Supabase Project URL in Settings.';
       } else if (msg.includes('Invalid API key') || msg.includes('JWT')) {
         msg = 'Invalid Supabase Anon Key. Please check the key in Settings & Configuration.';
-      } else if (msg.includes('User already registered')) {
-        msg = 'An account with this email already exists. Please Sign In instead.';
+      } else if (msg.includes('User already registered') || msg.includes('already exists') || msg.includes('Account already exists')) {
+        msg = 'Account already exists! Aapka account pehle se bana hua hai. Kripya "Sign In" tab se login karein.';
       } else if (msg.includes('Password should be at least')) {
         msg = 'Password is too short. Please use at least 6 characters.';
       } else if (msg.toLowerCase().includes('database error saving new user') || msg.toLowerCase().includes('database error')) {

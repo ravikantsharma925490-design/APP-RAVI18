@@ -1530,28 +1530,9 @@ app.post('/api/auth/create-account', async (req, res) => {
     if (createError) {
       const errMsg = createError.message || '';
       if (errMsg.includes('already registered') || errMsg.includes('already exists') || createError.status === 422) {
-        // Try to update existing user's password and confirm email so signup/login never fails
-        try {
-          const { data: listData } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
-          const existingUser = listData?.users?.find((u: any) => u.email?.toLowerCase() === cleanEmail);
-          if (existingUser) {
-            userId = existingUser.id;
-            await adminClient.auth.admin.updateUserById(existingUser.id, {
-              password,
-              email_confirm: true,
-              user_metadata: {
-                display_name: displayName?.trim() || cleanUsername,
-                username: cleanUsername,
-                country: country || 'India',
-              },
-            });
-            console.log(`[create-account] Updated existing user password for ${cleanEmail} (${userId})`);
-          } else {
-            return res.status(400).json({ error: 'An account with this email already exists. Please Sign In.' });
-          }
-        } catch (updErr: any) {
-          return res.status(400).json({ error: 'An account with this email already exists. Please Sign In.' });
-        }
+        return res.status(400).json({
+          error: 'Account already exists! Aapka account pehle se bana hua hai. Kripya "Sign In" tab se login karein.',
+        });
       } else {
         return res.status(400).json({ error: `Account creation error: ${errMsg}` });
       }
