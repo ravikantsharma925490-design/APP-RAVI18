@@ -159,40 +159,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/25 mx-auto">
             <MessageSquare className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-white">
+          <p className="text-xs font-semibold uppercase tracking-wider text-blue-400">
             LiveConnect
+          </p>
+          <h1 className="text-2xl font-extrabold tracking-tight text-white">
+            {mode === 'login' ? 'Login' : 'Sign Up'}
           </h1>
           <p className="text-xs text-neutral-400 font-medium">
             {mode === 'login'
               ? 'Sign in to your LiveConnect account with Google'
               : 'Create a new LiveConnect account with Google'}
           </p>
-        </div>
-
-        {/* Mode Switcher Tabs */}
-        <div className="grid grid-cols-2 p-1 rounded-xl bg-neutral-800/80 border border-neutral-700/60 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => switchMode('login')}
-            className={`py-2 rounded-lg transition-all cursor-pointer ${
-              mode === 'login'
-                ? 'bg-blue-600 text-white shadow-sm font-bold'
-                : 'text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            {t('auth.signIn', 'Sign In')}
-          </button>
-          <button
-            type="button"
-            onClick={() => switchMode('signup')}
-            className={`py-2 rounded-lg transition-all cursor-pointer ${
-              mode === 'signup'
-                ? 'bg-blue-600 text-white shadow-sm font-bold'
-                : 'text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            {t('auth.signUp', 'Create Account')}
-          </button>
         </div>
 
         {/* Error Messages Banner */}
@@ -275,6 +252,33 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </>
             )}
           </button>
+
+          {/* Switch Mode Footer Link */}
+          <div className="pt-3 text-center">
+            {mode === 'login' ? (
+              <p className="text-xs text-neutral-400 font-medium">
+                You don’t have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => switchMode('signup')}
+                  className="text-blue-400 hover:text-blue-300 font-bold hover:underline cursor-pointer ml-1 transition-colors"
+                >
+                  Sign Up
+                </button>
+              </p>
+            ) : (
+              <p className="text-xs text-neutral-400 font-medium">
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => switchMode('login')}
+                  className="text-blue-400 hover:text-blue-300 font-bold hover:underline cursor-pointer ml-1 transition-colors"
+                >
+                  Login
+                </button>
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
