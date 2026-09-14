@@ -438,15 +438,10 @@ export function useAuth() {
     setAuthError(null);
     const { isConfigured } = getSupabaseConfig();
     if (!isConfigured) {
-      const err = new Error('Supabase is not configured yet. Please click the Settings gear icon (top-right) to enter your Supabase URL & Anon Key.');
+      const err = new Error('Supabase is not configured yet.');
       setAuthError(err.message);
       throw err;
     }
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_intent_mode', 'signup');
-    }
-
     const supabase = getSupabase();
     const cleanEmail = email.trim().toLowerCase();
     try {
@@ -622,9 +617,6 @@ export function useAuth() {
 
   const signIn = async (email: string, password: string) => {
     setAuthError(null);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_intent_mode', 'login');
-    }
     const { isConfigured } = getSupabaseConfig();
     if (!isConfigured) {
       const err = new Error('Supabase is not configured yet. Please click the Settings gear icon (top-right) to enter your Supabase URL & Anon Key.');

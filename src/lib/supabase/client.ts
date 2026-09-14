@@ -20,37 +20,46 @@ function extractUrlFromJwt(token: string): string | null {
   return null;
 }
 
+const FALLBACK_URL = 'https://slvojojyssepcarxlmfd.supabase.co';
+const FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsdm9qb2p5c3NlcGNhcnhsbWZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MTkzMTEsImV4cCI6MjEwMjQ5NTMxMX0.9ZVwwycoPtNKo7zQXgkuGnz4xBqnAfUvtHGb47rR0A8';
+
+function isValidHttpUrl(str: string): boolean {
+  if (!str || typeof str !== 'string') return false;
+  const trimmed = str.trim();
+  return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+}
+
 export function getSupabaseConfig(): { url: string; anonKey: string; isConfigured: boolean } {
-  let envUrl = (import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL || 'https://slvojojyssepcarxlmfd.supabase.co') as string;
-  let envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsdm9qb2p5c3NlcGNhcnhsbWZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MTkzMTEsImV4cCI6MjEwMjQ5NTMxMX0.9ZVwwycoPtNKo7zQXgkuGnz4xBqnAfUvtHGb47rR0A8') as string;
+  const rawEnvUrl = (import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL || '') as string;
+  const rawEnvKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '') as string;
   
-  envUrl = envUrl ? envUrl.trim() : '';
-  envKey = envKey ? envKey.trim() : '';
+  const envUrl = isValidHttpUrl(rawEnvUrl) ? rawEnvUrl.trim() : FALLBACK_URL;
+  const envKey = rawEnvKey ? rawEnvKey.trim() : FALLBACK_KEY;
 
   const savedUrl = typeof window !== 'undefined' ? (localStorage.getItem(STORAGE_URL_KEY) || '').trim() : '';
   const savedKey = typeof window !== 'undefined' ? (localStorage.getItem(STORAGE_KEY_KEY) || '').trim() : '';
 
-  if (savedUrl && !savedUrl.startsWith('http://') && !savedUrl.startsWith('https://')) {
+  if (savedUrl && !isValidHttpUrl(savedUrl)) {
     if (typeof window !== 'undefined') localStorage.removeItem(STORAGE_URL_KEY);
   }
 
-  let url = (savedUrl && (savedUrl.startsWith('http://') || savedUrl.startsWith('https://'))) ? savedUrl : envUrl;
+  let url = isValidHttpUrl(savedUrl) ? savedUrl : envUrl;
   const anonKey = savedKey || envKey;
 
   // If URL is missing, invalid, or has a placeholder, auto-derive from anon key JWT ref
-  if ((!url || (!url.startsWith('http://') && !url.startsWith('https://')) || url.includes('your-supabase-project') || url.includes('placeholder')) && anonKey) {
+  if ((!isValidHttpUrl(url) || url.includes('your-supabase-project') || url.includes('placeholder')) && anonKey) {
     const derivedUrl = extractUrlFromJwt(anonKey);
-    url = derivedUrl || 'https://slvojojyssepcarxlmfd.supabase.co';
+    url = (derivedUrl && isValidHttpUrl(derivedUrl)) ? derivedUrl : FALLBACK_URL;
   }
 
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
-    url = 'https://slvojojyssepcarxlmfd.supabase.co';
+  if (!isValidHttpUrl(url)) {
+    url = FALLBACK_URL;
   }
   
   const isConfigured = Boolean(
     url && 
     anonKey && 
-    (url.startsWith('https://') || url.startsWith('http://')) &&
+    isValidHttpUrl(url) &&
     !url.includes('your-supabase-project') &&
     !url.includes('placeholder-project')
   );
@@ -60,9 +69,13 @@ export function getSupabaseConfig(): { url: string; anonKey: string; isConfigure
 
 export function saveSupabaseConfig(url: string, anonKey: string) {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_URL_KEY, url.trim());
-    localStorage.setItem(STORAGE_KEY_KEY, anonKey.trim());
-    // Trigger reset of cached client
+    const cleanUrl = url.trim();
+    if (isValidHttpUrl(cleanUrl)) {
+      localStorage.setItem(STORAGE_URL_KEY, cleanUrl);
+    }
+    if (anonKey.trim()) {
+      localStorage.setItem(STORAGE_KEY_KEY, anonKey.trim());
+    }
     supabaseInstance = null;
   }
 }
@@ -78,17 +91,13 @@ export function clearSupabaseConfig() {
 let supabaseInstance: SupabaseClient | null = null;
 
 export function getSupabase(): SupabaseClient {
-  const { url, anonKey, isConfigured } = getSupabaseConfig();
-
   if (supabaseInstance) {
     return supabaseInstance;
   }
 
-  let targetUrl = isConfigured ? url : 'https://slvojojyssepcarxlmfd.supabase.co';
-  if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-    targetUrl = 'https://slvojojyssepcarxlmfd.supabase.co';
-  }
-  const targetKey = isConfigured ? anonKey : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsdm9qb2p5c3NlcGNhcnhsbWZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MTkzMTEsImV4cCI6MjEwMjQ5NTMxMX0.9ZVwwycoPtNKo7zQXgkuGnz4xBqnAfUvtHGb47rR0A8';
+  const { url, anonKey } = getSupabaseConfig();
+  const targetUrl = isValidHttpUrl(url) ? url : FALLBACK_URL;
+  const targetKey = anonKey || FALLBACK_KEY;
 
   try {
     supabaseInstance = createClient(targetUrl, targetKey, {
@@ -105,7 +114,7 @@ export function getSupabase(): SupabaseClient {
     });
   } catch (err) {
     console.warn('Supabase client creation fallback:', err);
-    supabaseInstance = createClient('https://slvojojyssepcarxlmfd.supabase.co', targetKey);
+    supabaseInstance = createClient(FALLBACK_URL, FALLBACK_KEY);
   }
 
   return supabaseInstance;

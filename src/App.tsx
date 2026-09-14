@@ -256,14 +256,16 @@ export default function App() {
 
         <div className="relative flex flex-col items-center">
           <div className="relative flex items-center justify-center">
-            <div className="splash-ring absolute w-36 h-36 rounded-full border-2 border-purple-400" />
-            <img
-              src={logoImage}
-              alt="LiveConnect"
-              className="splash-logo relative w-28 h-28 object-contain drop-shadow-[0_0_30px_rgba(147,51,234,0.6)]"
-            />
+            <div className="splash-ring absolute w-40 h-40 rounded-full border-2 border-purple-400/60" />
+            <div className="splash-logo relative w-28 h-28 rounded-full overflow-hidden p-1 bg-gradient-to-tr from-cyan-400 via-purple-500 to-pink-500 shadow-[0_0_40px_rgba(168,85,247,0.75)] flex items-center justify-center">
+              <img
+                src={logoImage}
+                alt="LiveConnect"
+                className="w-full h-full object-cover rounded-full scale-110"
+              />
+            </div>
           </div>
-          <p className="splash-tagline text-xs font-semibold text-neutral-500 tracking-[0.3em] uppercase mt-5">
+          <p className="splash-tagline text-xs font-semibold text-purple-300 tracking-[0.3em] uppercase mt-6">
             Connecting you now
           </p>
         </div>
@@ -393,17 +395,13 @@ export default function App() {
     return (
       <>
         <AuthPage
-          onSignIn={signIn}
-          onSignUp={signUp}
-          onSendLoginOtp={sendLoginOtp}
           onGoogleSignIn={signInWithGoogle}
-          onResetPassword={resetPassword}
-          onStartPasswordRecovery={() => setIsPasswordRecovery(true)}
           authError={authError}
           clearError={() => setAuthError(null)}
           onOpenConfig={() => setIsConfigOpen(true)}
         />
         <ConfigModal isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} />
+        <LanguageSelectorModal />
         {callError && (
           <Toast
             title="Notice"

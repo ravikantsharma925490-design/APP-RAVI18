@@ -5,12 +5,7 @@ import { TermsAgreementModal } from '@/src/components/legal/TermsAgreementModal'
 import { LegalModal } from '@/src/components/legal/LegalModal';
 
 interface AuthPageProps {
-  onSignIn?: (email: string, pass: string) => Promise<any>;
-  onSignUp?: (email: string, pass: string, name: string, username: string, country?: string) => Promise<any>;
-  onSendLoginOtp?: (email: string) => Promise<any>;
   onGoogleSignIn?: () => Promise<any>;
-  onResetPassword?: (email: string) => Promise<any>;
-  onStartPasswordRecovery?: () => void;
   onOpenConfig?: () => void;
   authError: string | null;
   clearError: () => void;
@@ -131,8 +126,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           <h1 className="text-2xl font-extrabold tracking-tight text-white">
             Welcome to LiveConnect
           </h1>
-          <p className="text-xs text-neutral-400 font-medium">
-            Sign in or get started with your Google account
+          <p className="text-xs text-neutral-400 font-medium leading-relaxed max-w-xs mx-auto">
+            Connect with people worldwide via real-time video calls & instant messaging with your Google account
           </p>
         </div>
 

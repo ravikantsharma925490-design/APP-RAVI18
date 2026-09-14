@@ -78,57 +78,57 @@ export const LegalModal: React.FC<LegalModalProps> = ({
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-blue-500" />
-                  1. Acceptance of Terms & Account Registration
+                  1. Account Registration & Google OAuth
                 </h3>
                 <p>
-                  By creating an account or logging in to LiveConnect, you agree to comply with and be bound by these Terms of Use and Privacy Policy. Account registration requires a valid email address, display name, unique username handle, and country selection.
+                  By signing in to LiveConnect with your Google account, you agree to these Terms of Use and Privacy Policy. Initial onboarding requires setting up your profile with a Display Name, unique @username handle, Gender, and Country selection.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <Lock className="w-4 h-4 text-blue-500" />
-                  2. User Accounts, Handles & Password Recovery
+                  2. Real-Time Video, Audio & Messaging Features
                 </h3>
                 <p>
-                  You are responsible for maintaining the confidentiality of your login credentials and unique username handle. Password resets are handled securely via single-use Email Reset Links sent directly to your verified inbox.
+                  LiveConnect offers 1-on-1 HD video calling, voice calling, instant messaging, media sharing, and random global user matching. You agree to use these features responsibly for lawful and respectful communication.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-blue-500" />
-                  3. OTP Verification & 5-Minute Expiration
+                  3. Virtual Coins & Gifting System
                 </h3>
                 <p>
-                  Sign-up verification codes (OTPs) generated for account creation remain valid for exactly 5 minutes (300 seconds). Requesting a new code automatically generates a fresh token to protect your account.
+                  Virtual coins and gifts sent during calls or chats are non-refundable in-app items intended for entertainment and user appreciation. Coins hold no monetary cash value outside the LiveConnect platform.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-blue-500" />
-                  4. Community Standards & Communication Safety
+                  4. Community Guidelines & Safety Policy
                 </h3>
                 <p>
-                  LiveConnect enforces a mutual-follow communication model. You agree not to use voice/video calls or instant messages for harassment, spam, fraudulent activities, or illegal behavior. Users violating safety guidelines are subject to immediate account restriction.
+                  We maintain zero tolerance for harassment, hate speech, explicit nudity, abusive behavior, impersonation, or spam. Users violating community safety guidelines are subject to immediate blocking, report investigation, and permanent account ban.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-blue-500" />
-                  5. Free &amp; Unlimited Real-Time Features
+                  5. Account Deletion & Right to Terminate
                 </h3>
                 <p>
-                  All voice and video calling, real-time messaging, and online status features on LiveConnect are 100% free and unlimited. No paid subscriptions, hidden fees, or advertisements are required.
+                  You retain full ownership of your account and can permanently delete your profile, chat messages, and data at any time from your settings with immediate effect.
                 </p>
               </div>
             </>
           ) : (
             <>
               <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-medium">
-                🔒 <strong>Our Strict Privacy Pledge:</strong> Your information is used exclusively for account authentication and delivering real-time communication. We never sell, lease, or share personal user data with third parties.
+                🔒 <strong>Our Privacy Pledge:</strong> LiveConnect protects your personal identity. We do not sell, rent, or share your private data or communication logs with third parties.
               </div>
 
               <div className="space-y-2">
@@ -137,37 +137,37 @@ export const LegalModal: React.FC<LegalModalProps> = ({
                   1. Information We Collect
                 </h3>
                 <p>
-                  We collect essential account details: your email address, chosen display name, unique username handle (@username), avatar/profile picture, selected country, and account creation timestamp.
+                  We store basic profile data: Google account email, Display Name, unique @username, Avatar photo URL, Gender, Country, Bio, coin balance, and online presence status to enable app functionality.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <Lock className="w-4 h-4 text-emerald-500" />
-                  2. Audio, Video & Message Encryption
+                  2. WebRTC Encrypted Video & Audio Calls
                 </h3>
                 <p>
-                  Voice and video calls use peer-to-peer encrypted WebRTC media connections. We do not record, store, or monitor your private voice/video conversations or direct messages.
+                  Real-time audio and video streams are transmitted using WebRTC end-to-end media encryption directly between peers. We do not record or store your live video or voice calls.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                  3. Secure Authentication & Password Recovery
+                  3. Messaging & Data Security
                 </h3>
                 <p>
-                  Authentication data, hashed passwords, and temporary 5-minute verification tokens are stored securely with row-level security (RLS). Password resets are authorized exclusively via direct single-use email links.
+                  All text messages, coin transactions, and friend connections are protected with database Row-Level Security (RLS), ensuring only authorized participants can access their private communications.
                 </p>
               </div>
 
               <div className="space-y-2">
                 <h3 className="font-bold text-sm text-neutral-900 dark:text-white flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                  4. Data Ownership & Instant Deletion
+                  4. Instant Data Removal & Privacy Controls
                 </h3>
                 <p>
-                  You retain full control over your personal data. You may edit your profile, clear chat histories, or delete your account at any time with immediate effect across all servers.
+                  You have complete control over your privacy settings. You can block unwanted users, turn off active status visibility, or erase your entire account history with one click.
                 </p>
               </div>
             </>
