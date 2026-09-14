@@ -226,7 +226,11 @@ export function useAuth() {
               if (authData?.user) activeUser = authData.user;
             } catch {}
           }
-          updateUserState(null);
+          if (activeUser) {
+            updateUserState(activeUser);
+          } else {
+            updateUserState(null);
+          }
           updateProfileState(null);
           setOnboardingUser(activeUser || null);
           setNeedsOnboarding(true);
