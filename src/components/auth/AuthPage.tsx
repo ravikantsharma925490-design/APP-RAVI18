@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { useLanguage } from '@/src/lib/LanguageContext';
 import { TermsAgreementModal } from '@/src/components/legal/TermsAgreementModal';
@@ -38,12 +38,21 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     tab: 'terms',
   });
 
+  useEffect(() => {
+    if (authError === 'Account already exists!') {
+      setMode('signup');
+    } else if (authError === 'Account not found!') {
+      setMode('login');
+    }
+  }, [authError]);
+
   const switchMode = (newMode: 'login' | 'signup') => {
     setMode(newMode);
     clearError();
     setGoogleError(null);
     if (typeof window !== 'undefined') {
       localStorage.setItem('auth_intent_mode', newMode);
+      sessionStorage.setItem('auth_intent_mode', newMode);
     }
   };
 
@@ -58,6 +67,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
     if (typeof window !== 'undefined') {
       localStorage.setItem('auth_intent_mode', mode);
+      sessionStorage.setItem('auth_intent_mode', mode);
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('auth_intent', mode);
+        window.history.replaceState({}, '', url.toString());
+      } catch {}
     }
 
     setLoading(true);
@@ -70,10 +85,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
         const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
+        const redirectUrl = `${origin}?auth_intent=${mode}`;
+
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: origin,
+            redirectTo: redirectUrl,
             skipBrowserRedirect: isInIframe,
             queryParams: {
               access_type: 'offline',
