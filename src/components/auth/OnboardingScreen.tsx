@@ -275,16 +275,16 @@ export function OnboardingScreen({
             />
           </div>
 
-          {/* Profile Photo URL (Optional) */}
+          {/* Country (Optional) */}
           <div>
             <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
-              Profile Photo URL <span className="text-neutral-500 font-normal">(Optional)</span>
+              Country <span className="text-neutral-500 font-normal">(Optional)</span>
             </label>
             <input
-              type="url"
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              placeholder="https://example.com/photo.jpg"
+              type="text"
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              placeholder="e.g. India"
               className="w-full py-2.5 px-3.5 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
           </div>
