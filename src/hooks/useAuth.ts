@@ -154,6 +154,9 @@ export function useAuth() {
   });
   const [authError, setAuthError] = useState<string | null>(null);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [onboardingUser, setOnboardingUser] = useState<any>(null);
+  const [profileCheckPending, setProfileCheckPending] = useState(false);
 
   const updateProfileState = useCallback((newProf: Profile | null) => {
     setProfile(newProf);
@@ -185,53 +188,108 @@ export function useAuth() {
     }
   }, []);
 
-  const fetchProfile = useCallback(async (userId: string, currentUser?: User) => {
-    const supabase = getSupabase();
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+  const fetchProfile = useCallback(
+    async (userId: string, currentUser?: User) => {
+      setProfileCheckPending(true);
+      const supabase = getSupabase();
+      const storedIntent =
+        typeof window !== 'undefined' ? localStorage.getItem('auth_intent_mode') : null;
+      const intentMode = storedIntent || 'login';
 
-      if (error) {
-        // If profile doesn't exist yet, create one with the user's exact chosen metadata
-        if (currentUser) {
-          const email = currentUser.email || '';
-          const baseName = email.split('@')[0] || 'user';
-          const chosenUsername = (
-            currentUser.user_metadata?.username ||
-            baseName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()
-          );
-          
-          const newProfile: Partial<Profile> = {
-            id: userId,
-            username: chosenUsername,
-            display_name: (currentUser.user_metadata?.display_name || currentUser.user_metadata?.full_name || baseName),
-            avatar_url: currentUser.user_metadata?.avatar_url || null,
-            bio: 'Hey there! I am using LiveConnect.',
-            is_online: true,
-            last_seen: new Date().toISOString(),
-          };
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth_intent_mode');
+      }
 
-          const { data: createdProfile } = await supabase
-            .from('profiles')
-            .upsert(newProfile)
-            .select()
-            .single();
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
 
-          if (createdProfile) {
-            updateProfileState(createdProfile as Profile);
-            return;
+        if (error || !data) {
+          // NO PROFILE EXISTS in 'profiles' database table!
+          if (intentMode === 'signup') {
+            // User clicked "Create Account / Sign Up" -> proceed to Onboarding screen!
+            if (currentUser) {
+              setOnboardingUser(currentUser);
+              setNeedsOnboarding(true);
+            }
+          } else {
+            // User clicked "Sign In", BUT account / profile does NOT exist!
+            console.warn('[useAuth] Sign-in attempt failed: Account does not exist in profiles table for user', userId);
+            await supabase.auth.signOut();
+            updateUserState(null);
+            updateProfileState(null);
+            setNeedsOnboarding(false);
+            setOnboardingUser(null);
+            setAuthError('Account not found! Aapka LiveConnect account nahi mila. Kripya pehle "Create Account" tab par jaakar Sign Up karein.');
+          }
+        } else {
+          // PROFILE ALREADY EXISTS in 'profiles' database table!
+          if (intentMode === 'signup') {
+            // User clicked "Create Account", but their account ALREADY exists!
+            console.warn('[useAuth] Sign-up attempt notice: Account already exists for user', userId);
+            await supabase.auth.signOut();
+            updateUserState(null);
+            updateProfileState(null);
+            setNeedsOnboarding(false);
+            setOnboardingUser(null);
+            setAuthError('Account already exists! Aapka account pehle se bana hua hai. Kripya "Sign In" tab se login karein.');
+          } else {
+            // User clicked "Sign In" and profile exists -> Normal successful Sign In!
+            updateProfileState(data as Profile);
+            setNeedsOnboarding(false);
+            setAuthError(null);
           }
         }
-      } else if (data) {
-        updateProfileState(data as Profile);
+      } catch (err: any) {
+        console.warn('Error fetching profile:', err.message);
+      } finally {
+        setProfileCheckPending(false);
       }
-    } catch (err: any) {
-      console.warn('Error fetching profile:', err.message);
+    },
+    [updateProfileState, updateUserState]
+  );
+
+  const completeOnboarding = async (details: {
+    username: string;
+    displayName: string;
+    country: string;
+    bio: string;
+    gender: string;
+  }) => {
+    const supabase = getSupabase();
+    if (!onboardingUser) throw new Error('No pending user to onboard');
+
+    const cleanUsername = details.username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+
+    const newProfile: Partial<Profile> = {
+      id: onboardingUser.id,
+      username: cleanUsername,
+      display_name: details.displayName.trim() || cleanUsername,
+      avatar_url: onboardingUser.user_metadata?.avatar_url || null,
+      bio: details.bio.trim() || 'Hey there! I am using LiveConnect.',
+      gender: details.gender || null,
+      country: details.country || null,
+      is_online: true,
+      last_seen: new Date().toISOString(),
+    };
+
+    const { data: createdProfile, error } = await supabase
+      .from('profiles')
+      .upsert(newProfile)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    if (createdProfile) {
+      updateProfileState(createdProfile as Profile);
     }
-  }, [updateProfileState]);
+    setNeedsOnboarding(false);
+    setOnboardingUser(null);
+  };
 
   useEffect(() => {
     const { isConfigured } = getSupabaseConfig();
@@ -816,6 +874,10 @@ export function useAuth() {
     updatePassword,
     isPasswordRecovery,
     setIsPasswordRecovery,
+    needsOnboarding,
+    onboardingUser,
+    profileCheckPending,
+    completeOnboarding,
     updateProfile,
     refreshProfile: () => user && fetchProfile(user.id, user),
   };

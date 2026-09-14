@@ -99,6 +99,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       return;
     }
 
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('auth_intent_mode', mode);
+    }
+
     setLoading(true);
     try {
       if (onGoogleSignIn) {

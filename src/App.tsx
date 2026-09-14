@@ -29,6 +29,7 @@ import { PushBanner } from '@/src/components/ui/PushBanner';
 import { TermsConditions } from '@/src/components/legal/TermsConditions';
 import { PrivacyPolicy } from '@/src/components/legal/PrivacyPolicy';
 import { DeleteAccountPage } from '@/src/components/legal/DeleteAccountPage';
+import { OnboardingScreen } from '@/src/components/auth/OnboardingScreen';
 import { Profile } from '@/src/types';
 
 export default function App() {
@@ -47,6 +48,10 @@ export default function App() {
     updatePassword,
     isPasswordRecovery,
     setIsPasswordRecovery,
+    needsOnboarding,
+    onboardingUser,
+    profileCheckPending,
+    completeOnboarding,
     updateProfile,
     refreshProfile,
   } = useAuth();
@@ -199,7 +204,7 @@ export default function App() {
   }, []);
 
   // Loading initial auth or playing full splash screen
-  if (!minSplashDone || authLoading) {
+  if (!minSplashDone || authLoading || (user && profileCheckPending)) {
     return (
       <div 
         className="min-h-screen-safe w-full flex items-center justify-center bg-black relative overflow-hidden select-none"
@@ -350,7 +355,7 @@ export default function App() {
   }
 
   // Unauthenticated view (Support public standalone view of Terms & Privacy for App Store / Play Store Review)
-  if (!user) {
+  if (!user || (!profile && !needsOnboarding)) {
     if (typeof window !== 'undefined') {
       const pathname = window.location.pathname;
       if (pathname === '/app/help/terms' || pathname === '/terms') {
@@ -402,6 +407,23 @@ export default function App() {
           />
         )}
       </>
+    );
+  }
+
+  // Onboarding view for brand-new users (Google OAuth / missing profile)
+  if (needsOnboarding && (onboardingUser || user)) {
+    const activeUser = onboardingUser || user;
+    const prefill =
+      activeUser?.user_metadata?.full_name ||
+      activeUser?.user_metadata?.name ||
+      activeUser?.user_metadata?.display_name ||
+      activeUser?.email?.split('@')[0] ||
+      '';
+    return (
+      <OnboardingScreen
+        prefillName={prefill}
+        onComplete={completeOnboarding}
+      />
     );
   }
 
