@@ -207,7 +207,7 @@ export function useAuth() {
 
         if (!data || error) {
           // NO PROFILE EXISTS in 'profiles' database table!
-          if (intentMode === 'login' && storedIntent === 'login') {
+          if (storedIntent === 'login') {
             // User specifically clicked "Sign In", BUT account / profile does NOT exist!
             console.warn('[useAuth] Sign-in attempt failed: Account does not exist in profiles table for user', userId);
             await supabase.auth.signOut();
@@ -231,12 +231,27 @@ export function useAuth() {
             }
           }
         } else {
-          // PROFILE EXISTS in 'profiles' database table -> Log user in!
-          updateProfileState(data as Profile);
-          setNeedsOnboarding(false);
-          setAuthError(null);
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('auth_intent_mode');
+          // PROFILE ALREADY EXISTS in 'profiles' database table!
+          if (storedIntent === 'signup') {
+            // User specifically clicked "Create Account", but their account ALREADY exists!
+            console.warn('[useAuth] Sign-up attempt notice: Account already exists for user', userId);
+            await supabase.auth.signOut();
+            updateUserState(null);
+            updateProfileState(null);
+            setNeedsOnboarding(false);
+            setOnboardingUser(null);
+            setAuthError('Account already exists! Aapka account pehle se bana hua hai. Kripya "Sign In" tab se login karein.');
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('auth_intent_mode');
+            }
+          } else {
+            // Normal successful Sign In!
+            updateProfileState(data as Profile);
+            setNeedsOnboarding(false);
+            setAuthError(null);
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('auth_intent_mode');
+            }
           }
         }
       } catch (err: any) {
