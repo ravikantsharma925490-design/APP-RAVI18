@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { WORLD_COUNTRIES } from '@/src/lib/worldData';
 import { checkUsernameAvailability } from '@/src/hooks/useAuth';
-import { User, CheckCircle2, AlertCircle, Camera, Sparkles } from 'lucide-react';
+import { User, CheckCircle2, AlertCircle, Camera, Sparkles, Globe, ChevronDown } from 'lucide-react';
 
 interface OnboardingScreenProps {
   prefillName?: string;
@@ -103,6 +103,11 @@ export function OnboardingScreen({
 
     if (!gender) {
       setError('Gender is required. Please select your gender.');
+      return;
+    }
+
+    if (!country) {
+      setError('Country is required. Please select your country.');
       return;
     }
 
@@ -275,18 +280,29 @@ export function OnboardingScreen({
             />
           </div>
 
-          {/* Country (Optional) */}
+          {/* Country */}
           <div>
             <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
-              Country <span className="text-neutral-500 font-normal">(Optional)</span>
+              Country <span className="text-red-400">*</span>
             </label>
-            <input
-              type="text"
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-              placeholder="e.g. India"
-              className="w-full py-2.5 px-3.5 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-            />
+            <div className="relative">
+              <Globe className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <select
+                required
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                className="w-full pl-10 pr-8 py-2.5 rounded-xl bg-neutral-800/80 border border-neutral-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all appearance-none cursor-pointer"
+              >
+                <option value="">Select Country</option>
+                {WORLD_COUNTRIES.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {c.flag} {c.name}
+                  </option>
+                ))}
+                <option value="Other">🌍 Other</option>
+              </select>
+              <ChevronDown className="w-4 h-4 text-neutral-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
           </div>
 
           {/* Submit / Continue Button */}
