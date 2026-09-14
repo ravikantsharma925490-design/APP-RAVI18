@@ -3,17 +3,9 @@ import { User, Session } from '@supabase/supabase-js';
 import { getSupabase, getSupabaseConfig } from '@/src/lib/supabase/client';
 import { Profile } from '@/src/types';
 
-// Helper: read auth intent mode reliably from URL query param, localStorage, or sessionStorage
+// Helper: read auth intent mode reliably from localStorage, sessionStorage, or URL query param
 export const getStoredAuthIntent = (): 'login' | 'signup' | null => {
   if (typeof window === 'undefined') return null;
-  try {
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlIntent = urlParams.get('auth_intent');
-    if (urlIntent === 'signup' || urlIntent === 'login') {
-      return urlIntent;
-    }
-  } catch {}
-
   try {
     const localIntent = localStorage.getItem('auth_intent_mode');
     if (localIntent === 'signup' || localIntent === 'login') {
@@ -28,7 +20,26 @@ export const getStoredAuthIntent = (): 'login' | 'signup' | null => {
     }
   } catch {}
 
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlIntent = urlParams.get('auth_intent');
+    if (urlIntent === 'signup' || urlIntent === 'login') {
+      return urlIntent;
+    }
+  } catch {}
+
   return null;
+};
+
+export const setStoredAuthIntent = (mode: 'login' | 'signup') => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('auth_intent_mode', mode);
+    sessionStorage.setItem('auth_intent_mode', mode);
+    const url = new URL(window.location.href);
+    url.searchParams.set('auth_intent', mode);
+    window.history.replaceState({}, '', url.toString());
+  } catch {}
 };
 
 export const clearStoredAuthIntent = () => {
@@ -39,7 +50,9 @@ export const clearStoredAuthIntent = () => {
     const url = new URL(window.location.href);
     if (url.searchParams.has('auth_intent')) {
       url.searchParams.delete('auth_intent');
-      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : '') + url.hash);
+      const newSearch = url.searchParams.toString();
+      const newUrl = url.pathname + (newSearch ? `?${newSearch}` : '') + url.hash;
+      window.history.replaceState({}, '', newUrl);
     }
   } catch {}
 };
@@ -327,8 +340,16 @@ export function useAuth() {
             clearStoredAuthIntent();
           } else {
             // Normal successful Sign In!
-            if (currentUser) {
-              updateUserState(currentUser);
+            resetRejectedOAuth();
+            let activeUser = currentUser;
+            if (!activeUser) {
+              try {
+                const { data: authData } = await supabase.auth.getUser();
+                if (authData?.user) activeUser = authData.user;
+              } catch {}
+            }
+            if (activeUser) {
+              updateUserState(activeUser);
             }
             updateProfileState(data as Profile);
             setNeedsOnboarding(false);

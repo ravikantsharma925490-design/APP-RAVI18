@@ -3,7 +3,7 @@ import { MessageSquare } from 'lucide-react';
 import { useLanguage } from '@/src/lib/LanguageContext';
 import { TermsAgreementModal } from '@/src/components/legal/TermsAgreementModal';
 import { LegalModal } from '@/src/components/legal/LegalModal';
-import { resetRejectedOAuth } from '@/src/hooks/useAuth';
+import { resetRejectedOAuth, setStoredAuthIntent } from '@/src/hooks/useAuth';
 
 interface AuthPageProps {
   onSignIn?: (email: string, pass: string) => Promise<any>;
@@ -49,17 +49,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
   const switchMode = (newMode: 'login' | 'signup') => {
     resetRejectedOAuth();
+    setStoredAuthIntent(newMode);
     setMode(newMode);
     clearError();
     setGoogleError(null);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_intent_mode', newMode);
-      sessionStorage.setItem('auth_intent_mode', newMode);
-    }
   };
 
   const handleGoogleAuth = async () => {
     resetRejectedOAuth();
+    setStoredAuthIntent(mode);
     clearError();
     setGoogleError(null);
 
