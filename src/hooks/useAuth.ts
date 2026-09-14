@@ -436,20 +436,23 @@ export function useAuth() {
         await fetchProfile(newSession.user.id, newSession.user);
 
         if (event === 'SIGNED_IN') {
-          try {
-            await fetch('/api/auth/notify-login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                email: newSession.user.email,
-                displayName:
-                  newSession.user.user_metadata?.display_name ||
-                  newSession.user.user_metadata?.full_name ||
-                  newSession.user.email,
-              }),
-            });
-          } catch (notifyErr) {
-            console.warn('Login notification notice:', notifyErr);
+          const { data: currentAuth } = await supabase.auth.getUser();
+          if (currentAuth?.user) {
+            try {
+              await fetch('/api/auth/notify-login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: newSession.user.email,
+                  displayName:
+                    newSession.user.user_metadata?.display_name ||
+                    newSession.user.user_metadata?.full_name ||
+                    newSession.user.email,
+                }),
+              });
+            } catch (notifyErr) {
+              console.warn('Login notification notice:', notifyErr);
+            }
           }
         }
       } else {
@@ -977,7 +980,7 @@ export function useAuth() {
 
   return {
     user,
-    profile: effectiveProfile,
+    profile,
     session,
     loading,
     authError,

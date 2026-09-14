@@ -206,7 +206,7 @@ export default function App() {
   }, []);
 
   // Loading initial auth or playing full splash screen
-  if (!minSplashDone || authLoading || (user && profileCheckPending)) {
+  if (!minSplashDone || authLoading || profileCheckPending) {
     return (
       <div 
         className="min-h-screen-safe w-full flex items-center justify-center bg-black relative overflow-hidden select-none"
