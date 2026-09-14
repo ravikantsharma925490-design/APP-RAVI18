@@ -196,10 +196,6 @@ export function useAuth() {
         typeof window !== 'undefined' ? localStorage.getItem('auth_intent_mode') : null;
       const intentMode = storedIntent || 'login';
 
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('auth_intent_mode');
-      }
-
       try {
         const { data, error } = await supabase
           .from('profiles')
@@ -214,6 +210,9 @@ export function useAuth() {
             if (currentUser) {
               setOnboardingUser(currentUser);
               setNeedsOnboarding(true);
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('auth_intent_mode');
+              }
             }
           } else {
             // User clicked "Sign In", BUT account / profile does NOT exist!
@@ -224,6 +223,9 @@ export function useAuth() {
             setNeedsOnboarding(false);
             setOnboardingUser(null);
             setAuthError('Account not found! Aapka LiveConnect account nahi mila. Kripya pehle "Create Account" tab par jaakar Sign Up karein.');
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('auth_intent_mode');
+            }
           }
         } else {
           // PROFILE ALREADY EXISTS in 'profiles' database table!
@@ -236,11 +238,17 @@ export function useAuth() {
             setNeedsOnboarding(false);
             setOnboardingUser(null);
             setAuthError('Account already exists! Aapka account pehle se bana hua hai. Kripya "Sign In" tab se login karein.');
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('auth_intent_mode');
+            }
           } else {
             // User clicked "Sign In" and profile exists -> Normal successful Sign In!
             updateProfileState(data as Profile);
             setNeedsOnboarding(false);
             setAuthError(null);
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('auth_intent_mode');
+            }
           }
         }
       } catch (err: any) {
