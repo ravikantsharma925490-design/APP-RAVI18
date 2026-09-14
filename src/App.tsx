@@ -30,6 +30,7 @@ import { TermsConditions } from '@/src/components/legal/TermsConditions';
 import { PrivacyPolicy } from '@/src/components/legal/PrivacyPolicy';
 import { DeleteAccountPage } from '@/src/components/legal/DeleteAccountPage';
 import { OnboardingScreen } from '@/src/components/auth/OnboardingScreen';
+import { BannedScreen } from '@/src/components/auth/BannedScreen';
 import { Profile } from '@/src/types';
 
 export default function App() {
@@ -51,6 +52,7 @@ export default function App() {
     needsOnboarding,
     onboardingUser,
     profileCheckPending,
+    bannedUntilDate,
     completeOnboarding,
     updateProfile,
     refreshProfile,
@@ -267,6 +269,10 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  if (bannedUntilDate && new Date(bannedUntilDate).getTime() > Date.now()) {
+    return <BannedScreen bannedUntil={bannedUntilDate} />;
   }
 
   if (isPasswordRecovery) {

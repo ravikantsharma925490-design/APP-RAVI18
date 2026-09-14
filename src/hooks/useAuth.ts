@@ -157,6 +157,7 @@ export function useAuth() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [onboardingUser, setOnboardingUser] = useState<any>(null);
   const [profileCheckPending, setProfileCheckPending] = useState(false);
+  const [bannedUntilDate, setBannedUntilDate] = useState<string | null>(null);
 
   const updateProfileState = useCallback((newProf: Profile | null) => {
     setProfile(newProf);
@@ -363,6 +364,21 @@ export function useAuth() {
         setIsPasswordRecovery(true);
       }
 
+      if (newSession?.access_token) {
+        const banStatus = await fetch('/api/auth/check-ban-status', {
+          headers: { Authorization: `Bearer ${newSession.access_token}` },
+        }).then((r) => r.json()).catch(() => ({ banned: false }));
+
+        if (banStatus?.banned) {
+          await supabase.auth.signOut();
+          updateUserState(null);
+          updateProfileState(null);
+          setBannedUntilDate(banStatus.bannedUntil || null);
+          setLoading(false);
+          return;
+        }
+      }
+
       if (newSession?.user) {
         await fetchProfile(newSession.user.id, newSession.user);
 
@@ -389,8 +405,25 @@ export function useAuth() {
       setLoading(false);
     });
 
+    const banCheckInterval = setInterval(async () => {
+      const { data: currentSessionData } = await supabase.auth.getSession();
+      if (currentSessionData?.session?.access_token) {
+        const banStatus = await fetch('/api/auth/check-ban-status', {
+          headers: { Authorization: `Bearer ${currentSessionData.session.access_token}` },
+        }).then((r) => r.json()).catch(() => ({ banned: false }));
+
+        if (banStatus?.banned) {
+          await supabase.auth.signOut();
+          updateUserState(null);
+          updateProfileState(null);
+          setBannedUntilDate(banStatus.bannedUntil || null);
+        }
+      }
+    }, 60000);
+
     return () => {
       clearTimeout(safetyTimer);
+      clearInterval(banCheckInterval);
       subscription.unsubscribe();
     };
   }, [fetchProfile, updateUserState, updateProfileState]);
@@ -885,6 +918,7 @@ export function useAuth() {
     needsOnboarding,
     onboardingUser,
     profileCheckPending,
+    bannedUntilDate,
     completeOnboarding,
     updateProfile,
     refreshProfile: () => user && fetchProfile(user.id, user),
