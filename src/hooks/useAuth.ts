@@ -215,7 +215,7 @@ export function useAuth() {
             updateProfileState(null);
             setNeedsOnboarding(false);
             setOnboardingUser(null);
-            setAuthError('Account not found! Aapka LiveConnect account nahi mila. Kripya pehle "Create Account" tab par jaakar Sign Up karein.');
+            setAuthError('Account not found!');
             if (typeof window !== 'undefined') {
               localStorage.removeItem('auth_intent_mode');
             }
@@ -270,21 +270,28 @@ export function useAuth() {
   const completeOnboarding = async (details: {
     username: string;
     displayName: string;
-    country: string;
-    bio: string;
+    country?: string;
+    bio?: string;
     gender: string;
+    avatarUrl?: string;
   }) => {
     const supabase = getSupabase();
     if (!onboardingUser) throw new Error('No pending user to onboard');
 
     const cleanUsername = details.username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
 
+    const avatarUrl =
+      details.avatarUrl ||
+      onboardingUser.user_metadata?.avatar_url ||
+      onboardingUser.user_metadata?.picture ||
+      null;
+
     const newProfile: Partial<Profile> = {
       id: onboardingUser.id,
       username: cleanUsername,
       display_name: details.displayName.trim() || cleanUsername,
-      avatar_url: onboardingUser.user_metadata?.avatar_url || null,
-      bio: details.bio.trim() || 'Hey there! I am using LiveConnect.',
+      avatar_url: avatarUrl,
+      bio: details.bio?.trim() || 'Hey there! I am using LiveConnect.',
       gender: details.gender || null,
       country: details.country || null,
       is_online: true,
@@ -302,6 +309,7 @@ export function useAuth() {
     if (createdProfile) {
       updateProfileState(createdProfile as Profile);
     }
+    updateUserState(onboardingUser);
     setNeedsOnboarding(false);
     setOnboardingUser(null);
   };

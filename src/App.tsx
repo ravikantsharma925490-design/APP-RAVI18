@@ -419,15 +419,23 @@ export default function App() {
   // Onboarding view for brand-new users (Google OAuth / missing profile)
   if (needsOnboarding && (onboardingUser || user)) {
     const activeUser = onboardingUser || user;
-    const prefill =
+    const prefillName =
       activeUser?.user_metadata?.full_name ||
       activeUser?.user_metadata?.name ||
       activeUser?.user_metadata?.display_name ||
       activeUser?.email?.split('@')[0] ||
       '';
+    const prefillAvatar =
+      activeUser?.user_metadata?.avatar_url ||
+      activeUser?.user_metadata?.picture ||
+      '';
+    const prefillEmail = activeUser?.email || '';
+
     return (
       <OnboardingScreen
-        prefillName={prefill}
+        prefillName={prefillName}
+        prefillAvatar={prefillAvatar}
+        prefillEmail={prefillEmail}
         onComplete={completeOnboarding}
       />
     );
