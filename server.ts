@@ -1458,6 +1458,32 @@ app.post('/api/admin/ban-user', async (req, res) => {
 // Server-side in-memory OTP cache fallback
 const serverOtpStore = new Map<string, { code: string; expiresAt: number; verified: boolean }>();
 
+// Check Ban Status Endpoint
+app.get('/api/auth/check-ban-status', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!token) return res.status(401).json({ error: 'Not authenticated' });
+
+    const activeAdmin = adminSupabase || serverSupabase;
+    if (!activeAdmin) return res.status(500).json({ error: 'Server not configured' });
+
+    const { data: userData, error } = await serverSupabase.auth.getUser(token);
+    if (error || !userData?.user?.id) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { data: authUser } = await activeAdmin.auth.admin.getUserById(userData.user.id);
+    const bannedUntil = (authUser?.user as any)?.banned_until;
+    const isBanned = bannedUntil && new Date(bannedUntil).getTime() > Date.now();
+
+    return res.json({ banned: !!isBanned, bannedUntil: bannedUntil || null });
+  } catch (err: any) {
+    console.error('[check-ban-status] error:', err.message || err);
+    return res.status(500).json({ error: err.message || 'Failed to check ban status' });
+  }
+});
+
 // 4b. Create Account Server Endpoint
 app.post('/api/auth/create-account', async (req, res) => {
   try {
