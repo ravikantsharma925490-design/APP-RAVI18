@@ -44,6 +44,15 @@ export const clearStoredAuthIntent = () => {
   } catch {}
 };
 
+// Module-level rejection memory to prevent race conditions across concurrent auth events
+let rejectedOAuthUserId: string | null = null;
+let rejectedOAuthReason: 'Account already exists!' | 'Account not found!' | null = null;
+
+export const resetRejectedOAuth = () => {
+  rejectedOAuthUserId = null;
+  rejectedOAuthReason = null;
+};
+
 // Helper: check if a username is available across the database
 export async function checkUsernameAvailability(username: string, excludeUserId?: string): Promise<{
   available: boolean;
@@ -167,6 +176,7 @@ export async function generateUniqueUsernameSuggestion(baseHint?: string): Promi
 
 function loadCachedUser(): User | null {
   if (typeof window === 'undefined') return null;
+  if (getStoredAuthIntent()) return null;
   try {
     const raw = localStorage.getItem('liveconnect_cached_user');
     return raw ? JSON.parse(raw) : null;
@@ -177,6 +187,7 @@ function loadCachedUser(): User | null {
 
 function loadCachedProfile(): Profile | null {
   if (typeof window === 'undefined') return null;
+  if (getStoredAuthIntent()) return null;
   try {
     const raw = localStorage.getItem('liveconnect_cached_profile');
     return raw ? JSON.parse(raw) : null;
@@ -232,6 +243,21 @@ export function useAuth() {
 
   const fetchProfile = useCallback(
     async (userId: string, currentUser?: User) => {
+      // 1. Check if session was already marked as rejected in this OAuth flow
+      if (rejectedOAuthUserId === userId) {
+        console.warn('[useAuth] Session is rejected:', rejectedOAuthReason);
+        setProfileCheckPending(false);
+        updateUserState(null);
+        updateProfileState(null);
+        setNeedsOnboarding(false);
+        setOnboardingUser(null);
+        setAuthError(rejectedOAuthReason || 'Account already exists!');
+        try {
+          await getSupabase().auth.signOut();
+        } catch {}
+        return;
+      }
+
       setProfileCheckPending(true);
       const supabase = getSupabase();
       const storedIntent = getStoredAuthIntent();
@@ -250,7 +276,17 @@ export function useAuth() {
           if (intentMode === 'login') {
             // User specifically clicked "Sign In", BUT account / profile does NOT exist!
             console.warn('[useAuth] Sign-in attempt failed: Account does not exist in profiles table for user', userId);
+            rejectedOAuthUserId = userId;
+            rejectedOAuthReason = 'Account not found!';
+
+            updateUserState(null);
+            updateProfileState(null);
+            setNeedsOnboarding(false);
+            setOnboardingUser(null);
+            setAuthError('Account not found!');
+
             await supabase.auth.signOut();
+
             updateUserState(null);
             updateProfileState(null);
             setNeedsOnboarding(false);
@@ -270,9 +306,19 @@ export function useAuth() {
         } else {
           // PROFILE/ACCOUNT ALREADY EXISTS in 'profiles' database table!
           if (intentMode === 'signup') {
-            // User specifically clicked "Create Account", but their account ALREADY exists!
+            // User specifically clicked "Create Account / Sign Up", but their profile/account ALREADY exists!
             console.warn('[useAuth] Sign-up attempt notice: Account already exists for user', userId);
+            rejectedOAuthUserId = userId;
+            rejectedOAuthReason = 'Account already exists!';
+
+            updateUserState(null);
+            updateProfileState(null);
+            setNeedsOnboarding(false);
+            setOnboardingUser(null);
+            setAuthError('Account already exists!');
+
             await supabase.auth.signOut();
+
             updateUserState(null);
             updateProfileState(null);
             setNeedsOnboarding(false);
@@ -389,12 +435,18 @@ export function useAuth() {
         if (!initialSession?.user) {
           updateUserState(null);
           updateProfileState(null);
+        } else if (rejectedOAuthUserId === initialSession.user.id) {
+          updateUserState(null);
+          updateProfileState(null);
+          setNeedsOnboarding(false);
+          setOnboardingUser(null);
+          setAuthError(rejectedOAuthReason || 'Account already exists!');
+          supabase.auth.signOut().catch(() => {});
+        } else {
+          fetchProfile(initialSession.user.id, initialSession.user);
         }
         if (checkRecoveryFromUrl()) {
           setIsPasswordRecovery(true);
-        }
-        if (initialSession?.user) {
-          fetchProfile(initialSession.user.id, initialSession.user);
         }
         setLoading(false);
       })
@@ -433,6 +485,17 @@ export function useAuth() {
       }
 
       if (newSession?.user) {
+        if (rejectedOAuthUserId === newSession.user.id) {
+          updateUserState(null);
+          updateProfileState(null);
+          setNeedsOnboarding(false);
+          setOnboardingUser(null);
+          setAuthError(rejectedOAuthReason || 'Account already exists!');
+          await supabase.auth.signOut();
+          setLoading(false);
+          return;
+        }
+
         await fetchProfile(newSession.user.id, newSession.user);
 
         if (event === 'SIGNED_IN') {
@@ -921,6 +984,7 @@ export function useAuth() {
   } : null);
 
   const signInWithGoogle = async () => {
+    resetRejectedOAuth();
     setAuthError(null);
     const { isConfigured } = getSupabaseConfig();
     if (!isConfigured) {
