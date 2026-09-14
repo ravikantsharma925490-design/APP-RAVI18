@@ -222,6 +222,7 @@ export function useAuth() {
           } else {
             // User clicked "Create Account / Sign Up" OR no intent flag -> proceed to Onboarding screen!
             if (currentUser) {
+              updateUserState(null);
               setOnboardingUser(currentUser);
               setNeedsOnboarding(true);
               setAuthError(null);
@@ -240,12 +241,15 @@ export function useAuth() {
             updateProfileState(null);
             setNeedsOnboarding(false);
             setOnboardingUser(null);
-            setAuthError('Account already exists! Aapka account pehle se bana hua hai. Kripya "Sign In" tab se login karein.');
+            setAuthError('Account already exists!');
             if (typeof window !== 'undefined') {
               localStorage.removeItem('auth_intent_mode');
             }
           } else {
             // Normal successful Sign In!
+            if (currentUser) {
+              updateUserState(currentUser);
+            }
             updateProfileState(data as Profile);
             setNeedsOnboarding(false);
             setAuthError(null);
@@ -341,7 +345,10 @@ export function useAuth() {
       .getSession()
       .then(({ data: { session: initialSession } }) => {
         setSession(initialSession);
-        updateUserState(initialSession?.user ?? null);
+        if (!initialSession?.user) {
+          updateUserState(null);
+          updateProfileState(null);
+        }
         if (checkRecoveryFromUrl()) {
           setIsPasswordRecovery(true);
         }
@@ -360,7 +367,10 @@ export function useAuth() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       setSession(newSession);
-      updateUserState(newSession?.user ?? null);
+      if (!newSession?.user) {
+        updateUserState(null);
+        updateProfileState(null);
+      }
 
       if (event === 'PASSWORD_RECOVERY' || checkRecoveryFromUrl()) {
         setIsPasswordRecovery(true);
@@ -457,7 +467,7 @@ export function useAuth() {
         throw new Error('Username must be at least 3 characters (letters, numbers, underscores only).');
       }
 
-      // Check if username already exists across all users
+      // Check if username or email already exists across all users
       try {
         const { data: existingUser } = await supabase
           .from('profiles')
@@ -468,11 +478,21 @@ export function useAuth() {
         if (existingUser && existingUser.length > 0) {
           throw new Error(`Username "${cleanUsername}" is already taken by another user. Please choose a different username.`);
         }
+
+        const { data: existingEmailProf } = await supabase
+          .from('profiles')
+          .select('id, email')
+          .ilike('email', cleanEmail)
+          .limit(1);
+
+        if (existingEmailProf && existingEmailProf.length > 0) {
+          throw new Error('Account already exists!');
+        }
       } catch (checkErr: any) {
-        if (checkErr.message?.includes('already taken')) {
+        if (checkErr.message?.includes('already taken') || checkErr.message?.includes('already exists')) {
           throw checkErr;
         }
-        console.warn('Username pre-check notice:', checkErr.message);
+        console.warn('Username/email pre-check notice:', checkErr.message);
       }
 
       const origin = typeof window !== 'undefined' ? window.location.origin : undefined;
@@ -534,6 +554,9 @@ export function useAuth() {
           },
         });
         if (error) throw error;
+        if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          throw new Error('Account already exists!');
+        }
         createdUserId = data.user?.id || null;
       }
 
@@ -568,7 +591,7 @@ export function useAuth() {
       } else if (msg.includes('Invalid API key') || msg.includes('JWT')) {
         msg = 'Invalid Supabase Anon Key. Please check the key in Settings & Configuration.';
       } else if (msg.includes('User already registered') || msg.includes('already exists') || msg.includes('Account already exists')) {
-        msg = 'Account already exists! Aapka account pehle se bana hua hai. Kripya "Sign In" tab se login karein.';
+        msg = 'Account already exists!';
       } else if (msg.includes('Password should be at least')) {
         msg = 'Password is too short. Please use at least 6 characters.';
       } else if (msg.toLowerCase().includes('database error saving new user') || msg.toLowerCase().includes('database error')) {

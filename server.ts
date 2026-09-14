@@ -1531,7 +1531,7 @@ app.post('/api/auth/create-account', async (req, res) => {
       const errMsg = createError.message || '';
       if (errMsg.includes('already registered') || errMsg.includes('already exists') || createError.status === 422) {
         return res.status(400).json({
-          error: 'Account already exists! Aapka account pehle se bana hua hai. Kripya "Sign In" tab se login karein.',
+          error: 'Account already exists!',
         });
       } else {
         return res.status(400).json({ error: `Account creation error: ${errMsg}` });
