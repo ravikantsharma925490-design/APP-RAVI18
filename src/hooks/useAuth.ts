@@ -3,69 +3,6 @@ import { User, Session } from '@supabase/supabase-js';
 import { getSupabase, getSupabaseConfig } from '@/src/lib/supabase/client';
 import { Profile } from '@/src/types';
 
-// Helper: read auth intent mode reliably from localStorage, sessionStorage, or URL query param
-export const getStoredAuthIntent = (): 'login' | 'signup' | null => {
-  if (typeof window === 'undefined') return null;
-  try {
-    const localIntent = localStorage.getItem('auth_intent_mode');
-    if (localIntent === 'signup' || localIntent === 'login') {
-      return localIntent;
-    }
-  } catch {}
-
-  try {
-    const sessionIntent = sessionStorage.getItem('auth_intent_mode');
-    if (sessionIntent === 'signup' || sessionIntent === 'login') {
-      return sessionIntent;
-    }
-  } catch {}
-
-  try {
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlIntent = urlParams.get('auth_intent');
-    if (urlIntent === 'signup' || urlIntent === 'login') {
-      return urlIntent;
-    }
-  } catch {}
-
-  return null;
-};
-
-export const setStoredAuthIntent = (mode: 'login' | 'signup') => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem('auth_intent_mode', mode);
-    sessionStorage.setItem('auth_intent_mode', mode);
-    const url = new URL(window.location.href);
-    url.searchParams.set('auth_intent', mode);
-    window.history.replaceState({}, '', url.toString());
-  } catch {}
-};
-
-export const clearStoredAuthIntent = () => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.removeItem('auth_intent_mode');
-    sessionStorage.removeItem('auth_intent_mode');
-    const url = new URL(window.location.href);
-    if (url.searchParams.has('auth_intent')) {
-      url.searchParams.delete('auth_intent');
-      const newSearch = url.searchParams.toString();
-      const newUrl = url.pathname + (newSearch ? `?${newSearch}` : '') + url.hash;
-      window.history.replaceState({}, '', newUrl);
-    }
-  } catch {}
-};
-
-// Module-level rejection memory to prevent race conditions across concurrent auth events
-let rejectedOAuthUserId: string | null = null;
-let rejectedOAuthReason: 'Account already exists!' | 'Account not found!' | null = null;
-
-export const resetRejectedOAuth = () => {
-  rejectedOAuthUserId = null;
-  rejectedOAuthReason = null;
-};
-
 // Helper: check if a username is available across the database
 export async function checkUsernameAvailability(username: string, excludeUserId?: string): Promise<{
   available: boolean;
@@ -189,7 +126,6 @@ export async function generateUniqueUsernameSuggestion(baseHint?: string): Promi
 
 function loadCachedUser(): User | null {
   if (typeof window === 'undefined') return null;
-  if (getStoredAuthIntent()) return null;
   try {
     const raw = localStorage.getItem('liveconnect_cached_user');
     return raw ? JSON.parse(raw) : null;
@@ -200,7 +136,6 @@ function loadCachedUser(): User | null {
 
 function loadCachedProfile(): Profile | null {
   if (typeof window === 'undefined') return null;
-  if (getStoredAuthIntent()) return null;
   try {
     const raw = localStorage.getItem('liveconnect_cached_profile');
     return raw ? JSON.parse(raw) : null;
@@ -256,24 +191,8 @@ export function useAuth() {
 
   const fetchProfile = useCallback(
     async (userId: string, currentUser?: User) => {
-      // 1. Check if session was already marked as rejected in this OAuth flow
-      if (rejectedOAuthUserId === userId) {
-        console.warn('[useAuth] Session is rejected:', rejectedOAuthReason);
-        setProfileCheckPending(false);
-        updateUserState(null);
-        updateProfileState(null);
-        setNeedsOnboarding(false);
-        setOnboardingUser(null);
-        setAuthError(rejectedOAuthReason || 'Account already exists!');
-        try {
-          await getSupabase().auth.signOut();
-        } catch {}
-        return;
-      }
-
       setProfileCheckPending(true);
       const supabase = getSupabase();
-      const storedIntent = getStoredAuthIntent();
 
       try {
         const { data, error } = await supabase
@@ -282,81 +201,36 @@ export function useAuth() {
           .eq('id', userId)
           .maybeSingle();
 
-        const intentMode = storedIntent ? storedIntent : (data ? 'login' : 'login');
-
-        if (!data || error) {
-          // NO PROFILE/ACCOUNT EXISTS in 'profiles' database table!
-          if (intentMode === 'login') {
-            // User specifically clicked "Sign In", BUT account / profile does NOT exist!
-            console.warn('[useAuth] Sign-in attempt failed: Account does not exist in profiles table for user', userId);
-            rejectedOAuthUserId = userId;
-            rejectedOAuthReason = 'Account not found!';
-
-            updateUserState(null);
-            updateProfileState(null);
-            setNeedsOnboarding(false);
-            setOnboardingUser(null);
-            setAuthError('Account not found!');
-
-            await supabase.auth.signOut();
-
-            updateUserState(null);
-            updateProfileState(null);
-            setNeedsOnboarding(false);
-            setOnboardingUser(null);
-            setAuthError('Account not found!');
-            clearStoredAuthIntent();
-          } else {
-            // User clicked "Create Account / Sign Up" AND profile does NOT exist -> proceed to Onboarding screen!
-            if (currentUser) {
-              updateUserState(null);
-              setOnboardingUser(currentUser);
-              setNeedsOnboarding(true);
-              setAuthError(null);
-              clearStoredAuthIntent();
-            }
+        if (data && !error) {
+          // CASE 1 — Existing LiveConnect account profile exists
+          let activeUser = currentUser;
+          if (!activeUser) {
+            try {
+              const { data: authData } = await supabase.auth.getUser();
+              if (authData?.user) activeUser = authData.user;
+            } catch {}
           }
+          if (activeUser) {
+            updateUserState(activeUser);
+          }
+          updateProfileState(data as Profile);
+          setNeedsOnboarding(false);
+          setOnboardingUser(null);
+          setAuthError(null);
         } else {
-          // PROFILE/ACCOUNT ALREADY EXISTS in 'profiles' database table!
-          if (intentMode === 'signup') {
-            // User specifically clicked "Create Account / Sign Up", but their profile/account ALREADY exists!
-            console.warn('[useAuth] Sign-up attempt notice: Account already exists for user', userId);
-            rejectedOAuthUserId = userId;
-            rejectedOAuthReason = 'Account already exists!';
-
-            updateUserState(null);
-            updateProfileState(null);
-            setNeedsOnboarding(false);
-            setOnboardingUser(null);
-            setAuthError('Account already exists!');
-
-            await supabase.auth.signOut();
-
-            updateUserState(null);
-            updateProfileState(null);
-            setNeedsOnboarding(false);
-            setOnboardingUser(null);
-            setAuthError('Account already exists!');
-            clearStoredAuthIntent();
-          } else {
-            // Normal successful Sign In!
-            resetRejectedOAuth();
-            let activeUser = currentUser;
-            if (!activeUser) {
-              try {
-                const { data: authData } = await supabase.auth.getUser();
-                if (authData?.user) activeUser = authData.user;
-              } catch {}
-            }
-            if (activeUser) {
-              updateUserState(activeUser);
-            }
-            updateProfileState(data as Profile);
-            setNeedsOnboarding(false);
-            setOnboardingUser(null);
-            setAuthError(null);
-            clearStoredAuthIntent();
+          // CASE 2 — New Google account (No profile in public.profiles yet)
+          let activeUser = currentUser;
+          if (!activeUser) {
+            try {
+              const { data: authData } = await supabase.auth.getUser();
+              if (authData?.user) activeUser = authData.user;
+            } catch {}
           }
+          updateUserState(null);
+          updateProfileState(null);
+          setOnboardingUser(activeUser || null);
+          setNeedsOnboarding(true);
+          setAuthError(null);
         }
       } catch (err: any) {
         console.warn('Error fetching profile:', err.message);
@@ -456,13 +330,6 @@ export function useAuth() {
         if (!initialSession?.user) {
           updateUserState(null);
           updateProfileState(null);
-        } else if (rejectedOAuthUserId === initialSession.user.id) {
-          updateUserState(null);
-          updateProfileState(null);
-          setNeedsOnboarding(false);
-          setOnboardingUser(null);
-          setAuthError(rejectedOAuthReason || 'Account already exists!');
-          supabase.auth.signOut().catch(() => {});
         } else {
           fetchProfile(initialSession.user.id, initialSession.user);
         }
@@ -506,17 +373,6 @@ export function useAuth() {
       }
 
       if (newSession?.user) {
-        if (rejectedOAuthUserId === newSession.user.id) {
-          updateUserState(null);
-          updateProfileState(null);
-          setNeedsOnboarding(false);
-          setOnboardingUser(null);
-          setAuthError(rejectedOAuthReason || 'Account already exists!');
-          await supabase.auth.signOut();
-          setLoading(false);
-          return;
-        }
-
         await fetchProfile(newSession.user.id, newSession.user);
 
         if (event === 'SIGNED_IN') {
@@ -1005,7 +861,6 @@ export function useAuth() {
   } : null);
 
   const signInWithGoogle = async () => {
-    resetRejectedOAuth();
     setAuthError(null);
     const { isConfigured } = getSupabaseConfig();
     if (!isConfigured) {
@@ -1019,13 +874,10 @@ export function useAuth() {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
-      const currentIntent = getStoredAuthIntent() || 'login';
-      const redirectUrl = `${origin}?auth_intent=${currentIntent}`;
-
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: redirectUrl,
+          redirectTo: origin,
           skipBrowserRedirect: isInIframe,
           queryParams: {
             access_type: 'offline',

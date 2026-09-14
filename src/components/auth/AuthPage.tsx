@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { useLanguage } from '@/src/lib/LanguageContext';
 import { TermsAgreementModal } from '@/src/components/legal/TermsAgreementModal';
 import { LegalModal } from '@/src/components/legal/LegalModal';
-import { resetRejectedOAuth, setStoredAuthIntent } from '@/src/hooks/useAuth';
 
 interface AuthPageProps {
   onSignIn?: (email: string, pass: string) => Promise<any>;
@@ -23,8 +22,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   authError,
   clearError,
 }) => {
-  const { currentLanguage, openLanguageModal, t } = useLanguage();
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const { currentLanguage, openLanguageModal } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
 
@@ -39,41 +37,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     tab: 'terms',
   });
 
-  useEffect(() => {
-    if (authError === 'Account already exists!') {
-      setMode('signup');
-    } else if (authError === 'Account not found!') {
-      setMode('login');
-    }
-  }, [authError]);
-
-  const switchMode = (newMode: 'login' | 'signup') => {
-    resetRejectedOAuth();
-    setStoredAuthIntent(newMode);
-    setMode(newMode);
-    clearError();
-    setGoogleError(null);
-  };
-
   const handleGoogleAuth = async () => {
-    resetRejectedOAuth();
-    setStoredAuthIntent(mode);
     clearError();
     setGoogleError(null);
 
     if (!agreedTerms) {
       setGoogleError('Please agree to the Terms of Use and Privacy Policy to continue.');
       return;
-    }
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_intent_mode', mode);
-      sessionStorage.setItem('auth_intent_mode', mode);
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.set('auth_intent', mode);
-        window.history.replaceState({}, '', url.toString());
-      } catch {}
     }
 
     setLoading(true);
@@ -86,12 +56,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
         const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
-        const redirectUrl = `${origin}?auth_intent=${mode}`;
-
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: redirectUrl,
+            redirectTo: origin,
             skipBrowserRedirect: isInIframe,
             queryParams: {
               access_type: 'offline',
@@ -161,12 +129,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             LiveConnect
           </p>
           <h1 className="text-2xl font-extrabold tracking-tight text-white">
-            {mode === 'login' ? 'Login' : 'Sign Up'}
+            Welcome to LiveConnect
           </h1>
           <p className="text-xs text-neutral-400 font-medium">
-            {mode === 'login'
-              ? 'Sign in to your LiveConnect account with Google'
-              : 'Create a new LiveConnect account with Google'}
+            Sign in or get started with your Google account
           </p>
         </div>
 
@@ -227,7 +193,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             </label>
           </div>
 
-          {/* Google Sign-In / Sign-Up Button */}
+          {/* Google Single Auth Button */}
           <button
             type="button"
             onClick={handleGoogleAuth}
@@ -245,38 +211,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
                 </svg>
                 <span className="text-sm font-bold">
-                  {mode === 'login' ? 'Continue with Google' : 'Sign Up with Google'}
+                  Continue with Google
                 </span>
               </>
             )}
           </button>
-
-          {/* Switch Mode Footer Link */}
-          <div className="pt-3 text-center">
-            {mode === 'login' ? (
-              <p className="text-xs text-neutral-400 font-medium">
-                You don’t have an account?{' '}
-                <button
-                  type="button"
-                  onClick={() => switchMode('signup')}
-                  className="text-blue-400 hover:text-blue-300 font-bold hover:underline cursor-pointer ml-1 transition-colors"
-                >
-                  Sign Up
-                </button>
-              </p>
-            ) : (
-              <p className="text-xs text-neutral-400 font-medium">
-                Already have an account?{' '}
-                <button
-                  type="button"
-                  onClick={() => switchMode('login')}
-                  className="text-blue-400 hover:text-blue-300 font-bold hover:underline cursor-pointer ml-1 transition-colors"
-                >
-                  Login
-                </button>
-              </p>
-            )}
-          </div>
         </div>
       </div>
 
