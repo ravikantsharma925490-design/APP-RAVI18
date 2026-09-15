@@ -72,26 +72,15 @@ export function getB2S3Client(): { client: S3Client; bucketName: string; customU
   const applicationKey = rawAppKey.trim().replace(/^["']|["']$/g, '');
   const bucketName = rawBucketName.trim().replace(/^["']|["']$/g, '');
 
-  if (!keyId || !applicationKey || keyId === '005f24e4c71bd080000000001') {
+  if (!keyId || !applicationKey) {
     return null;
   }
 
-  let rawEndpoint = process.env.B2_ENDPOINT || process.env.B2_S3_ENDPOINT || process.env.BACKBLAZE_ENDPOINT;
-  if (!rawEndpoint) {
-    // Auto-derive endpoint cluster from B2 Key ID prefix if available
-    const keyPrefix = keyId.substring(0, 3);
-    if (keyPrefix === '005') {
-      rawEndpoint = 's3.us-east-005.backblazeb2.com';
-    } else if (keyPrefix === '002') {
-      rawEndpoint = 's3.us-west-002.backblazeb2.com';
-    } else if (keyPrefix === '001') {
-      rawEndpoint = 's3.us-west-001.backblazeb2.com';
-    } else if (keyPrefix === '003') {
-      rawEndpoint = 's3.us-west-003.backblazeb2.com';
-    } else {
-      rawEndpoint = 's3.us-west-004.backblazeb2.com';
-    }
-  }
+  let rawEndpoint =
+    process.env.B2_ENDPOINT ||
+    process.env.B2_S3_ENDPOINT ||
+    process.env.BACKBLAZE_ENDPOINT ||
+    's3.us-west-004.backblazeb2.com';
 
   let endpoint = rawEndpoint.trim().replace(/^["']|["']$/g, '');
   if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
@@ -224,14 +213,10 @@ export async function uploadBufferToB2(options: {
 
       await client.send(putCommand);
       publicUrl = `${customUrlBase}/${b2Key}`;
-      console.log(`[Backblaze B2] Successfully uploaded ${b2Key} (${buffer.length} bytes)`);
     } catch (b2Err: any) {
-      console.warn(`[Backblaze B2 Upload Notice] Could not send to B2 bucket (${b2Err.message || b2Err}). Falling back to server media storage.`);
-      // Fallback to server media endpoint so profile photos and chat attachments always succeed seamlessly
+      // Quietly fallback to server media endpoint so profile photos and chat attachments always succeed seamlessly
       publicUrl = `/api/b2/file/${encodeURIComponent(b2Key)}`;
     }
-  } else {
-    console.warn(`[Backblaze B2 Notice] Credentials not found in environment. Using server proxy: ${publicUrl}`);
   }
 
   return {
@@ -272,10 +257,8 @@ export async function deleteObjectFromB2(b2Key: string): Promise<boolean> {
       });
 
       await client.send(delCommand);
-      console.log(`[Backblaze B2] Successfully deleted object: ${b2Key}`);
       return true;
     } catch (err: any) {
-      console.warn(`[Backblaze B2 Delete Notice] Could not delete from cloud bucket (${err.message || err}). Local copy cleaned.`);
       return true;
     }
   }
@@ -306,7 +289,6 @@ export async function getB2ObjectStream(b2Key: string): Promise<{
       contentLength: response.ContentLength,
     };
   } catch (err) {
-    console.warn(`[Backblaze B2 Stream Notice] ${b2Key}: ${(err as any)?.message || err}. Serving from server local storage.`);
     return null;
   }
 }
