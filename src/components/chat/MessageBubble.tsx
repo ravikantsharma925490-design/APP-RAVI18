@@ -864,7 +864,50 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     }
   }
 
-  // 4. Check if message is a VOICE NOTE: [VOICE:duration:dataUrl]
+  // 4. Check if message is a VIDEO: [VIDEO:url] or [VIDEO:url:caption]
+  const isVideo = message.content?.startsWith('[VIDEO:') && message.content.endsWith(']');
+  let videoUrl = '';
+  let videoCaption = '';
+  if (isVideo) {
+    const inside = message.content.slice(7, -1);
+    if (inside.startsWith('data:video')) {
+      const b64Pos = inside.indexOf(';base64,');
+      if (b64Pos !== -1) {
+        const nextColon = inside.indexOf(':', b64Pos);
+        if (nextColon !== -1) {
+          videoUrl = inside.slice(0, nextColon);
+          videoCaption = inside.slice(nextColon + 1);
+        } else {
+          videoUrl = inside;
+        }
+      } else {
+        videoUrl = inside;
+      }
+    } else if (inside.startsWith('http://') || inside.startsWith('https://')) {
+      const slashIndex = inside.indexOf('/', 8);
+      if (slashIndex !== -1) {
+        const nextColon = inside.indexOf(':', slashIndex);
+        if (nextColon !== -1) {
+          videoUrl = inside.slice(0, nextColon);
+          videoCaption = inside.slice(nextColon + 1);
+        } else {
+          videoUrl = inside;
+        }
+      } else {
+        videoUrl = inside;
+      }
+    } else {
+      const firstColon = inside.indexOf(':');
+      if (firstColon !== -1) {
+        videoUrl = inside.slice(0, firstColon);
+        videoCaption = inside.slice(firstColon + 1);
+      } else {
+        videoUrl = inside;
+      }
+    }
+  }
+
+  // 5. Check if message is a VOICE NOTE: [VOICE:duration:dataUrl]
   const isVoice = message.content?.startsWith('[VOICE:') && message.content.endsWith(']');
   let voiceDuration = 1;
   let voiceAudioSrc = '';
@@ -1046,7 +1089,51 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
           </div>
         </div>
+      ) : isVideo ? (
+        /* Render Video Attachment */
+        <div
+          className={cn(
+            'rounded-2xl shadow-xs overflow-hidden max-w-[280px] sm:max-w-[360px] border transition-all',
+            isMine
+              ? 'bg-blue-600 text-white rounded-br-xs border-blue-500'
+              : 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 border-neutral-200/90 dark:border-neutral-700/60 rounded-bl-xs'
+          )}
+        >
+          <div className="relative overflow-hidden bg-black/90">
+            <video
+              src={videoUrl}
+              controls
+              preload="metadata"
+              className="w-full max-h-80 object-contain rounded-t-2xl"
+            />
+          </div>
+
+          {/* Caption & Timestamp */}
+          <div className="p-2.5 space-y-1">
+            {videoCaption && (
+              <p className="text-sm whitespace-pre-wrap leading-relaxed">{videoCaption}</p>
+            )}
+            <div
+              className={cn(
+                'flex items-center justify-end gap-1 text-[10px] select-none',
+                isMine ? 'text-blue-100/90' : 'text-neutral-400'
+              )}
+            >
+              <span>{formatTime(message.created_at)}</span>
+              {isMine && (
+                <span className="inline-flex items-center ml-0.5">
+                  {message.is_read ? (
+                    <CheckCheck className="w-4 h-4 text-cyan-300" strokeWidth={2.5} />
+                  ) : (
+                    <Check className="w-3.5 h-3.5 text-blue-200/70" strokeWidth={2} />
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
       ) : isVoice ? (
+
         /* Render Voice Note Player */
         <div
           className={cn(

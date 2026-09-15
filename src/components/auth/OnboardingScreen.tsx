@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { WORLD_COUNTRIES } from '@/src/lib/worldData';
 import { checkUsernameAvailability } from '@/src/hooks/useAuth';
-import { User, CheckCircle2, AlertCircle, Camera, Sparkles, Globe, ChevronDown } from 'lucide-react';
+import { User, CheckCircle2, AlertCircle, Camera, Sparkles, Globe, ChevronDown, Upload, Trash2, Loader2 } from 'lucide-react';
+import { uploadMediaToB2 } from '@/src/lib/b2Client';
 
 interface OnboardingScreenProps {
   prefillName?: string;
@@ -41,7 +42,44 @@ export function OnboardingScreen({
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Profile picture size must be 5 MB or less.');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    setError(null);
+
+    try {
+      const res = await uploadMediaToB2({
+        fileOrBlob: file,
+        category: 'profile',
+        userId: prefillEmail || username || 'onboarding',
+        fileName: file.name,
+        mimeType: file.type || 'image/jpeg',
+      });
+
+      if (res?.url) {
+        setAvatarUrl(res.url);
+      } else {
+        throw new Error('Failed to get uploaded photo URL.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload photo to Backblaze B2.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   // Sync prefill values if they arrive asynchronously
   useEffect(() => {
@@ -156,10 +194,22 @@ export function OnboardingScreen({
           </p>
         </div>
 
-        {/* Profile Photo Preview */}
-        <div className="flex flex-col items-center justify-center space-y-2">
-          <div className="relative group">
-            <div className="w-20 h-20 rounded-2xl bg-neutral-800 border-2 border-blue-500/40 overflow-hidden flex items-center justify-center shadow-lg shadow-blue-500/10">
+        {/* Profile Photo Preview & Upload */}
+        <div className="flex flex-col items-center justify-center space-y-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png, image/jpeg, image/webp, image/gif"
+            onChange={handlePhotoUpload}
+            className="hidden"
+          />
+
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="relative group cursor-pointer"
+            title="Click to upload profile photo"
+          >
+            <div className="w-24 h-24 rounded-2xl bg-neutral-800 border-2 border-blue-500/50 overflow-hidden flex items-center justify-center shadow-lg shadow-blue-500/10 group-hover:border-blue-400 transition-all">
               {avatarUrl ? (
                 <img
                   src={avatarUrl}
@@ -168,17 +218,58 @@ export function OnboardingScreen({
                   onError={() => setAvatarUrl('')}
                 />
               ) : (
-                <User className="w-9 h-9 text-neutral-400" />
+                <User className="w-10 h-10 text-neutral-400" />
               )}
             </div>
-            {prefillAvatar && (
-              <div className="absolute -bottom-1 -right-1 bg-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white shadow">
+
+            {/* Camera Overlay Badge */}
+            <div className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+              <Camera className="w-6 h-6" />
+            </div>
+
+            {prefillAvatar && avatarUrl === prefillAvatar && (
+              <div className="absolute -bottom-1 -right-1 bg-blue-600 text-[10px] font-bold px-2 py-0.5 rounded-full text-white shadow border border-blue-400/40">
                 Google
               </div>
             )}
           </div>
-          <p className="text-[11px] text-neutral-400 font-medium">
-            {avatarUrl ? 'Photo imported from Google account' : 'Optional Profile Photo'}
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={uploadingPhoto}
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3.5 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {uploadingPhoto ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Upload className="w-3.5 h-3.5" />
+              )}
+              <span>{uploadingPhoto ? 'Uploading...' : avatarUrl ? 'Change Photo' : 'Upload Photo'}</span>
+            </button>
+
+            {avatarUrl && (
+              <button
+                type="button"
+                disabled={uploadingPhoto}
+                onClick={() => setAvatarUrl('')}
+                className="px-3.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Remove</span>
+              </button>
+            )}
+          </div>
+
+          <p className="text-[11px] text-neutral-400 font-medium text-center">
+            {uploadingPhoto
+              ? 'Uploading to Backblaze B2...'
+              : avatarUrl
+              ? prefillAvatar && avatarUrl === prefillAvatar
+                ? 'Photo imported from Google account (click to change)'
+                : 'Custom photo selected (Backblaze B2)'
+              : 'Upload custom photo or use avatar'}
           </p>
         </div>
 

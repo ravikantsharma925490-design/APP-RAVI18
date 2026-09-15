@@ -21,6 +21,9 @@ import {
   UserCheck,
   UserPlus,
   Mail,
+  Camera,
+  Upload,
+  Trash2,
 } from 'lucide-react';
 import { Profile, UserRelationStatus } from '@/src/types';
 import { cn, getAvatarColor, getInitials, formatJoinedYear } from '@/src/lib/utils';
@@ -28,6 +31,7 @@ import { checkUsernameAvailability } from '@/src/hooks/useAuth';
 import { WORLD_COUNTRIES } from '@/src/lib/worldData';
 import { FollowButton, FollowStatus } from './FollowButton';
 import { FollowsListModal } from './FollowsListModal';
+import { replaceProfilePictureInB2, removeProfilePictureFromB2 } from '@/src/lib/b2Client';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -109,6 +113,77 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   // Follows List Modal state
   const [showFollowsModal, setShowFollowsModal] = useState(false);
   const [followsListInitialTab, setFollowsListInitialTab] = useState<'followers' | 'following'>('followers');
+
+  // Backblaze B2 Avatar Upload state & handlers
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
+    e.target.value = '';
+
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMessage('Profile picture size must be 5 MB or less.');
+      return;
+    }
+
+    setAvatarUploading(true);
+    setErrorMessage(null);
+
+    try {
+      const newUrl = await replaceProfilePictureInB2({
+        file,
+        userId: currentUser.id,
+        oldB2FileId: currentUser.b2_file_id || null,
+        onUpdateProfile: async (updates) => {
+          try {
+            await onUpdateProfile(updates);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      });
+
+      setAvatarUrl(newUrl);
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to upload profile picture to Backblaze B2.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!currentUser) return;
+    setAvatarUploading(true);
+    setErrorMessage(null);
+
+    try {
+      await removeProfilePictureFromB2({
+        userId: currentUser.id,
+        b2FileId: currentUser.b2_file_id || null,
+        onUpdateProfile: async (updates) => {
+          try {
+            await onUpdateProfile(updates);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      });
+
+      setAvatarUrl('');
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to remove profile picture.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   // Check username availability when user modifies username
   useEffect(() => {
@@ -271,7 +346,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         <div className="p-6 overflow-y-auto space-y-5">
           {/* Avatar preview */}
           <div className="flex flex-col items-center">
-            <div className="relative mb-3">
+            <div
+              onClick={() => {
+                if (isEditingSelf) {
+                  avatarFileInputRef.current?.click();
+                }
+              }}
+              className={cn('relative mb-3 group', isEditingSelf && 'cursor-pointer')}
+              title={isEditingSelf ? 'Click to change profile picture' : undefined}
+            >
               {(isEditingSelf ? avatarUrl : targetUser.avatar_url) ? (
                 <img
                   src={isEditingSelf ? avatarUrl : (targetUser.avatar_url as string)}
@@ -289,10 +372,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 </div>
               )}
 
+              {/* Camera Hover Overlay when editing self */}
+              {isEditingSelf && (
+                <div className="absolute inset-0 rounded-3xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                  <Camera className="w-6 h-6" />
+                </div>
+              )}
+
               {/* Online Indicator */}
               <span
                 className={cn(
-                  'absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-white dark:border-neutral-900',
+                  'absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-white dark:border-neutral-900 z-10',
                   isTargetOnline ? 'bg-emerald-500 shadow-sm' : 'bg-neutral-400'
                 )}
                 title={isTargetOnline ? 'Online' : 'Offline'}
@@ -384,15 +474,51 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             )}
 
             {isEditingSelf && (
-              <button
-                type="button"
-                onClick={setRandomAvatar}
-                className="mt-3 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-900/40 cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Generate Random Avatar</span>
-              </button>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                <input
+                  ref={avatarFileInputRef}
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp, image/gif"
+                  className="hidden"
+                  onChange={handleAvatarFileChange}
+                />
+                <button
+                  type="button"
+                  disabled={avatarUploading}
+                  onClick={() => avatarFileInputRef.current?.click()}
+                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-900/40 cursor-pointer transition-all disabled:opacity-50"
+                >
+                  {avatarUploading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5" />
+                  )}
+                  <span>{avatarUploading ? 'Uploading...' : 'Upload Picture'}</span>
+                </button>
+
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    disabled={avatarUploading}
+                    onClick={handleRemoveAvatar}
+                    className="text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200/60 dark:border-rose-900/40 cursor-pointer transition-all disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Remove Picture</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={setRandomAvatar}
+                  className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-100 dark:bg-neutral-800/80 border border-neutral-200/60 dark:border-neutral-700/60 cursor-pointer transition-all"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Random Avatar</span>
+                </button>
+              </div>
             )}
+
           </div>
 
           {errorMessage && (

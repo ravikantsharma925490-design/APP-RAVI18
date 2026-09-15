@@ -15,6 +15,7 @@ import {
   PartyPopper,
   Laugh,
   Check,
+  Video,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { uploadMediaToServer } from '@/src/lib/mediaUpload';
@@ -206,6 +207,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [imageFileName, setImageFileName] = useState<string>('');
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
 
+  // Staged Video Attachment State
+  const [stagedVideoFile, setStagedVideoFile] = useState<File | null>(null);
+  const [stagedVideoUrl, setStagedVideoUrl] = useState<string | null>(null);
+
   // Voice Note Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -215,6 +220,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const videoFileInputRef = useRef<HTMLInputElement | null>(null);
   const emojiModalRef = useRef<HTMLDivElement | null>(null);
   const stickerModalRef = useRef<HTMLDivElement | null>(null);
   const isSubmittingRef = useRef<boolean>(false);
@@ -265,15 +271,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => window.removeEventListener('paste', handlePaste);
   }, [disabled, isRecording]);
 
-  // Compress & convert selected image to base64
+  // Compress & convert selected image to base64 with 5 MB size validation
   const processSelectedImage = (file: File) => {
     if (!file.type.startsWith('image/')) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Photo size must be 5 MB or less.');
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        // Resize image to max 1280px dimension to ensure optimal performance & fast sync
+        // Resize image to max 1280px dimension
         const maxDim = 1280;
         let { width, height } = img;
         if (width > maxDim || height > maxDim) {
@@ -295,6 +306,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
           setStagedImage(dataUrl);
           setImageFileName(file.name);
+          if (stagedVideoUrl) {
+            URL.revokeObjectURL(stagedVideoUrl);
+            setStagedVideoUrl(null);
+            setStagedVideoFile(null);
+          }
           inputRef.current?.focus();
         }
       };
@@ -308,8 +324,30 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (file) {
       processSelectedImage(file);
     }
-    // reset input so the same file can be selected again
     e.target.value = '';
+  };
+
+  const handleVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    // Enforce 50 MB Video Size Limit
+    if (file.size > 50 * 1024 * 1024) {
+      alert('Video size must be 50 MB or less.');
+      return;
+    }
+
+    if (stagedVideoUrl) {
+      URL.revokeObjectURL(stagedVideoUrl);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setStagedVideoFile(file);
+    setStagedVideoUrl(previewUrl);
+    setStagedImage(null);
+    setImageFileName('');
+    inputRef.current?.focus();
   };
 
   // Submit / Send Handler
@@ -319,7 +357,46 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     isSubmittingRef.current = true;
 
     try {
-      // Case 1: Staged Image
+      // Case 1: Staged Video Attachment
+      if (stagedVideoFile) {
+        const caption = inputText.trim();
+        const videoFile = stagedVideoFile;
+
+        if (stagedVideoUrl) {
+          URL.revokeObjectURL(stagedVideoUrl);
+        }
+        setStagedVideoFile(null);
+        setStagedVideoUrl(null);
+        setInputText('');
+        setIsUploadingMedia(true);
+
+        try {
+          const uploadedUrl = await uploadMediaToServer(videoFile, {
+            mimeType: videoFile.type || 'video/mp4',
+            fileName: videoFile.name || 'video.mp4',
+            mediaType: 'video',
+            category: 'chat-video',
+          });
+
+          if (uploadedUrl) {
+            const videoPayload = caption
+              ? `[VIDEO:${uploadedUrl}:${caption}]`
+              : `[VIDEO:${uploadedUrl}]`;
+            await onSendMessage(videoPayload);
+          } else {
+            alert('Video upload failed. Please try again.');
+          }
+        } catch (err: any) {
+          console.error('Failed to send video attachment:', err);
+          alert(err.message || 'Failed to upload video.');
+        } finally {
+          setIsUploadingMedia(false);
+          inputRef.current?.focus();
+        }
+        return;
+      }
+
+      // Case 2: Staged Photo Attachment
       if (stagedImage) {
         const caption = inputText.trim();
         const currentStaged = stagedImage;
@@ -335,6 +412,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             mimeType: 'image/jpeg',
             fileName: currentFileName || 'photo.jpg',
             mediaType: 'image',
+            category: 'chat-photo',
           });
 
           const finalSrc = uploadedUrl || currentStaged;
@@ -343,8 +421,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             : `[IMAGE:${finalSrc}]`;
 
           await onSendMessage(imagePayload);
-        } catch (err) {
+        } catch (err: any) {
           console.error('Failed to send image attachment:', err);
+          alert(err.message || 'Failed to upload photo.');
         } finally {
           setIsUploadingMedia(false);
           inputRef.current?.focus();
@@ -352,7 +431,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         return;
       }
 
-      // Case 2: Standard Text Message
+      // Case 3: Standard Text Message
       const text = inputText.trim();
       if (!text) return;
 
@@ -365,6 +444,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }, 300);
     }
   };
+
 
   // Insert Emoji at cursor position
   const handleEmojiClick = (emoji: string) => {
@@ -562,7 +642,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return `${mins}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const hasContent = inputText.trim().length > 0 || Boolean(stagedImage);
+  const hasContent = inputText.trim().length > 0 || Boolean(stagedImage) || Boolean(stagedVideoFile);
 
   return (
     <div className="relative w-full">
@@ -572,6 +652,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         type="file"
         accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
         onChange={handleFileChange}
+        className="hidden"
+      />
+
+      {/* Hidden File Input for Video Selection */}
+      <input
+        ref={videoFileInputRef}
+        type="file"
+        accept="video/mp4,video/webm,video/ogg,video/quicktime,video/m4v"
+        onChange={handleVideoFileChange}
         className="hidden"
       />
 
@@ -612,7 +701,46 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </div>
           </motion.div>
         )}
+
+        {/* Staged Video Preview Strip */}
+        {stagedVideoUrl && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            className="mb-2 p-2.5 rounded-2xl bg-neutral-100 dark:bg-neutral-800/90 border border-neutral-200 dark:border-neutral-700/80 shadow-md flex items-center gap-3"
+          >
+            <div className="relative group shrink-0">
+              <video
+                src={stagedVideoUrl}
+                className="w-16 h-16 rounded-xl object-cover border border-neutral-300 dark:border-neutral-600 shadow-xs"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (stagedVideoUrl) URL.revokeObjectURL(stagedVideoUrl);
+                  setStagedVideoUrl(null);
+                  setStagedVideoFile(null);
+                }}
+                className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white shadow-md transition-transform hover:scale-110 active:scale-95 cursor-pointer"
+                title="Remove video"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="flex-1 min-w-0 text-xs">
+              <p className="font-semibold text-neutral-900 dark:text-neutral-100 truncate flex items-center gap-1.5">
+                <Video className="w-3.5 h-3.5 text-blue-500" />
+                <span>{stagedVideoFile?.name || 'Selected video'}</span>
+              </p>
+              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                {(stagedVideoFile?.size ? (stagedVideoFile.size / (1024 * 1024)).toFixed(1) : '0')} MB • Ready to send to Backblaze B2.
+              </p>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
+
 
       {/* Emoji Picker Popover Modal */}
       <AnimatePresence>
@@ -791,7 +919,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <input
             ref={inputRef}
             type="text"
-            placeholder={stagedImage ? "Add a caption..." : `Message ${displayName || ''}...`}
+            placeholder={stagedImage || stagedVideoFile ? "Add a caption..." : `Message ${displayName || ''}...`}
             value={inputText}
             onChange={(e) => {
               setInputText(e.target.value);
@@ -826,10 +954,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               onClick={() => fileInputRef.current?.click()}
               disabled={disabled}
               className="p-2 rounded-full text-neutral-500 hover:text-blue-600 dark:text-neutral-400 dark:hover:text-blue-400 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
-              title="Attach Photo"
+              title="Attach Photo (Max 5MB)"
             >
               <ImageIcon className="w-5 h-5" strokeWidth={1.9} />
             </button>
+
+            {/* 3. Video Attachment Button (Video Icon) */}
+            <button
+              type="button"
+              onClick={() => videoFileInputRef.current?.click()}
+              disabled={disabled}
+              className="p-2 rounded-full text-neutral-500 hover:text-blue-600 dark:text-neutral-400 dark:hover:text-blue-400 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+              title="Attach Video (Max 50MB)"
+            >
+              <Video className="w-5 h-5" strokeWidth={1.9} />
+            </button>
+
 
             {/* 3. Sticker / Reactions Button (Sticker Icon) */}
             <button

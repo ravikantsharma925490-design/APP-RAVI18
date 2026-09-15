@@ -7,6 +7,13 @@ import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import nodemailer from 'nodemailer';
+import {
+  uploadBufferToB2,
+  deleteObjectFromB2,
+  getB2ObjectStream,
+  validateFileSize,
+  MediaCategory,
+} from './server/b2Service';
 
 dotenv.config();
 
@@ -2787,10 +2794,92 @@ app.post('/api/messages/send', async (req, res) => {
 });
 
 // ----------------------------------------------------
-// MEDIA STORAGE & FILE SERVING API
+// MEDIA STORAGE & FILE SERVING API (BACKBLAZE B2)
 // ----------------------------------------------------
 
-// Upload image / voice note / attachment
+// 1. Backblaze B2 Upload Endpoint
+app.post('/api/b2/upload', async (req, res) => {
+  try {
+    const { base64Data, category, userId, conversationId, messageId, mimeType, fileName } = req.body || {};
+    if (!base64Data) {
+      return res.status(400).json({ error: 'base64Data is required' });
+    }
+
+    const cat: MediaCategory = (category as MediaCategory) || 'chat-photo';
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    // Server-side size validation enforcement
+    const validation = validateFileSize(buffer.length, cat);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const result = await uploadBufferToB2({
+      buffer,
+      category: cat,
+      userId: userId || 'user',
+      conversationId,
+      messageId,
+      mimeType: mimeType || 'application/octet-stream',
+      fileName,
+    });
+
+    return res.json(result);
+  } catch (err: any) {
+    console.error('B2 upload endpoint error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to upload to Backblaze B2' });
+  }
+});
+
+// 2. Backblaze B2 Delete Endpoint
+app.post('/api/b2/delete', async (req, res) => {
+  try {
+    const { b2_file_id } = req.body || {};
+    if (!b2_file_id) {
+      return res.status(400).json({ error: 'b2_file_id is required' });
+    }
+
+    const success = await deleteObjectFromB2(b2_file_id);
+    return res.json({ success, b2_file_id });
+  } catch (err: any) {
+    console.error('B2 delete endpoint error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to delete object from Backblaze B2' });
+  }
+});
+
+// 3. Backblaze B2 Stream / Proxy Serving Endpoint
+app.get('/api/b2/file/*', async (req, res) => {
+  try {
+    const b2Key = decodeURIComponent(req.params[0] || '');
+    if (!b2Key) {
+      return res.status(400).send('File key required');
+    }
+
+    // Try streaming directly from Backblaze B2 bucket
+    const b2StreamData = await getB2ObjectStream(b2Key);
+    if (b2StreamData && b2StreamData.stream) {
+      if (b2StreamData.contentType) res.setHeader('Content-Type', b2StreamData.contentType);
+      if (b2StreamData.contentLength) res.setHeader('Content-Length', b2StreamData.contentLength);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return b2StreamData.stream.pipe(res);
+    }
+
+    // Local disk fallback
+    const sanitizedLocalName = b2Key.replace(/\//g, '_');
+    const localPath = path.join(process.cwd(), 'uploads', sanitizedLocalName);
+    if (fs.existsSync(localPath)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.sendFile(localPath);
+    }
+
+    return res.status(404).send('File not found');
+  } catch (err: any) {
+    console.error('B2 file serve error:', err);
+    return res.status(500).send('Error serving media file');
+  }
+});
+
+// Legacy / General Upload endpoint integrated with Backblaze B2
 app.post('/api/media/upload', async (req, res) => {
   try {
     const { base64Data, mimeType, fileName, mediaType } = req.body;
@@ -3190,6 +3279,45 @@ app.post('/api/messages/mark-read', async (req, res) => {
   }
 });
 
+function extractB2KeysFromMessage(msgContent?: string): string[] {
+  if (!msgContent) return [];
+  const keys: string[] = [];
+
+  if (
+    msgContent.includes('chat/photos/') ||
+    msgContent.includes('chat/videos/') ||
+    msgContent.includes('chat/voice-notes/') ||
+    msgContent.includes('profile/')
+  ) {
+    const matches = msgContent.match(/(chat\/(photos|videos|voice-notes)\/[^\s\]"']+|profile\/[^\s\]"']+)/g);
+    if (matches) {
+      matches.forEach((m) => keys.push(m));
+    }
+  }
+
+  if (msgContent.includes('/api/b2/file/')) {
+    const matches = msgContent.match(/\/api\/b2\/file\/([^\s\]"']+)/g);
+    if (matches) {
+      matches.forEach((m) => {
+        const key = decodeURIComponent(m.replace('/api/b2/file/', ''));
+        if (key) keys.push(key);
+      });
+    }
+  }
+
+  if (msgContent.includes('/api/media/file/')) {
+    const matches = msgContent.match(/\/api\/media\/file\/([^\s\]"']+)/g);
+    if (matches) {
+      matches.forEach((m) => {
+        const key = decodeURIComponent(m.replace('/api/media/file/', ''));
+        if (key) keys.push(key);
+      });
+    }
+  }
+
+  return Array.from(new Set(keys));
+}
+
 // 5. Delete message (single)
 app.post('/api/messages/delete', async (req, res) => {
   try {
@@ -3200,6 +3328,37 @@ app.post('/api/messages/delete', async (req, res) => {
     const { conversationId, messageId } = body || {};
     if (!messageId) {
       return res.status(400).json({ error: 'messageId required' });
+    }
+
+    // Check for Backblaze B2 media in target message and delete actual cloud file from B2
+    try {
+      let targetMessage: ServerMessage | undefined;
+      if (conversationId) {
+        const msgs = messagesServerStore.get(conversationId) || [];
+        targetMessage = msgs.find((m) => m.id === messageId);
+      }
+      if (!targetMessage) {
+        for (const list of messagesServerStore.values()) {
+          const found = list.find((m) => m.id === messageId);
+          if (found) {
+            targetMessage = found;
+            break;
+          }
+        }
+      }
+
+      if (targetMessage?.content) {
+        const b2Keys = extractB2KeysFromMessage(targetMessage.content);
+        for (const b2Key of b2Keys) {
+          try {
+            await deleteObjectFromB2(b2Key);
+          } catch (delErr) {
+            console.warn('[Backblaze B2 Delete Warning]', delErr);
+          }
+        }
+      }
+    } catch (b2CheckErr) {
+      console.warn('[B2 Media Delete Inspection Notice]', b2CheckErr);
     }
 
     deletedMessagesServerStore.add(messageId);

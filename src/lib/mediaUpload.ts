@@ -1,18 +1,22 @@
 /**
  * Client-Side Media Upload Utility
- * Uploads photos and voice recordings to the server media endpoint
- * and returns clean, short URLs (/api/media/file/:id) to prevent database constraint violations.
+ * Uploads photos, videos, and voice recordings to Backblaze B2 storage via server endpoint
+ * and returns clean Backblaze B2 URLs to prevent database constraint violations.
  */
+
+import { validateClientFileSize, B2MediaCategory, B2_CLIENT_ERROR_MESSAGES } from './b2Client';
 
 export interface UploadMediaResult {
   url: string;
   fileId: string;
   size: number;
   mimeType: string;
+  b2_file_id?: string;
+  b2_file_name?: string;
 }
 
 /**
- * Compress an image data URL or blob to a balanced size (max 1280px dimension, webp/jpeg 0.82 quality)
+ * Compress an image data URL or blob to a balanced size (max 1280px dimension, jpeg 0.82 quality)
  */
 async function compressImageIfNeeded(dataUrlOrBlob: string | Blob): Promise<string> {
   return new Promise((resolve) => {
@@ -63,21 +67,45 @@ async function compressImageIfNeeded(dataUrlOrBlob: string | Blob): Promise<stri
 }
 
 /**
- * Upload an image or audio file/blob/dataUrl to the server media storage
+ * Upload an image, video, or audio file/blob/dataUrl to Backblaze B2 storage
  */
 export async function uploadMediaToServer(
   data: Blob | string,
   options: {
     mimeType?: string;
     fileName?: string;
-    mediaType?: 'image' | 'audio' | 'file';
+    mediaType?: 'image' | 'audio' | 'video' | 'file';
+    category?: B2MediaCategory;
+    userId?: string;
+    conversationId?: string;
+    messageId?: string;
   } = {}
 ): Promise<string> {
-  const { mimeType = 'image/jpeg', fileName = 'upload.jpg', mediaType = 'image' } = options;
+  const {
+    mimeType = 'image/jpeg',
+    fileName = 'upload.jpg',
+    mediaType = 'image',
+    category,
+    userId = 'user',
+    conversationId,
+    messageId,
+  } = options;
 
   let base64Data = '';
   let finalMimeType = mimeType;
   let targetData = data;
+
+  // Determine B2 media category
+  let targetCategory: B2MediaCategory = category || 'chat-photo';
+  if (!category) {
+    if (mediaType === 'video' || (typeof mimeType === 'string' && mimeType.startsWith('video/'))) {
+      targetCategory = 'chat-video';
+    } else if (mediaType === 'audio' || (typeof mimeType === 'string' && mimeType.startsWith('audio/'))) {
+      targetCategory = 'chat-voice-note';
+    } else if (mediaType === 'image' || (typeof mimeType === 'string' && mimeType.startsWith('image/'))) {
+      targetCategory = 'chat-photo';
+    }
+  }
 
   try {
     // Compress images before upload
@@ -99,6 +127,10 @@ export async function uploadMediaToServer(
       }
     } else if (targetData instanceof Blob) {
       finalMimeType = targetData.type || mimeType;
+
+      // Validate client file size
+      validateClientFileSize(targetData.size, targetCategory);
+
       base64Data = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -113,16 +145,23 @@ export async function uploadMediaToServer(
 
     finalMimeType = (finalMimeType || mimeType || 'image/jpeg').split(';')[0].trim().toLowerCase();
 
-    const response = await fetch('/api/media/upload', {
+    // Check size of base64 data
+    const approximateSizeBytes = Math.round((base64Data.length * 3) / 4);
+    validateClientFileSize(approximateSizeBytes, targetCategory);
+
+    const response = await fetch('/api/b2/upload', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         base64Data,
+        category: targetCategory,
+        userId,
+        conversationId,
+        messageId,
         mimeType: finalMimeType,
         fileName,
-        mediaType,
       }),
     });
 
@@ -131,12 +170,20 @@ export async function uploadMediaToServer(
       if (result && result.url) {
         return result.url;
       }
+    } else {
+      const errRes = await response.json().catch(() => null);
+      if (errRes && errRes.error) {
+        throw new Error(errRes.error);
+      }
     }
   } catch (err: any) {
-    console.warn('Media upload notice:', err?.message || err);
+    if (err.message && B2_CLIENT_ERROR_MESSAGES[targetCategory]) {
+      throw err;
+    }
+    console.warn('Backblaze B2 upload notice:', err?.message || err);
   }
 
-  // Graceful fallback: return inline data URL so the media can always be played / viewed
+  // Graceful fallback
   if (typeof data === 'string' && data.startsWith('data:')) {
     return data;
   }
@@ -146,3 +193,4 @@ export async function uploadMediaToServer(
   }
   return '';
 }
+
