@@ -2876,18 +2876,34 @@ app.get('/api/b2/file/*', async (req, res) => {
 
       if (range) {
         const parts = range.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        let start = parseInt(parts[0], 10);
+        let end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+        if (isNaN(start)) {
+          start = fileSize - parseInt(parts[1], 10);
+          end = fileSize - 1;
+        }
+        if (isNaN(end)) {
+          end = fileSize - 1;
+        }
+
+        if (start < 0) start = 0;
+        if (end >= fileSize) end = fileSize - 1;
+
+        if (start > end || start >= fileSize) {
+          res.setHeader('Content-Range', `bytes */${fileSize}`);
+          return res.status(416).send('Requested Range Not Satisfiable');
+        }
+
         const chunksize = end - start + 1;
         const file = fs.createReadStream(localPath, { start, end });
-        const head = {
+        res.writeHead(206, {
           'Content-Range': `bytes ${start}-${end}/${fileSize}`,
           'Accept-Ranges': 'bytes',
           'Content-Length': chunksize,
           'Content-Type': mimeType,
           'Cache-Control': 'public, max-age=31536000, immutable',
-        };
-        res.writeHead(206, head);
+        });
         return file.pipe(res);
       } else {
         const head = {

@@ -1080,7 +1080,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             <video
               src={videoUrl}
               controls
-              preload="metadata"
+              preload="auto"
+              playsInline
               className="w-full h-full object-contain rounded-t-2xl"
             />
           </div>
