@@ -7,6 +7,7 @@ import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import nodemailer from 'nodemailer';
+import dns from 'dns';
 import {
   uploadBufferToB2,
   deleteObjectFromB2,
@@ -35,10 +36,13 @@ function createStandardTransporter(host?: string, port?: number, user?: string, 
     secure: isSecure,
     requireTLS: !isSecure,
     auth: { user: targetUser, pass: targetPass },
-    family: 4, // Force IPv4 socket resolution (prevents ENETUNREACH on Render/Cloud hosts)
-    connectionTimeout: 8000,
+    lookup: (hostname: string, _options: any, callback: any) => {
+      // Strictly force IPv4 resolution in Node.js to eliminate 2607:f8b0:... IPv6 ENETUNREACH
+      dns.lookup(hostname, { family: 4 }, callback);
+    },
+    connectionTimeout: 7000,
     greetingTimeout: 5000,
-    socketTimeout: 10000,
+    socketTimeout: 8000,
     tls: { rejectUnauthorized: false },
   });
 }
@@ -1791,16 +1795,20 @@ app.post('/api/auth/notify-login', async (req, res) => {
     const cleanEmail = String(email).trim().toLowerCase();
     const name = String(rawName || displayName || cleanEmail.split('@')[0]).trim();
 
-    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-    const port = parseInt(process.env.SMTP_PORT || '587', 10);
+    const isSmtpDisabled =
+      process.env.ENABLE_SMTP === 'false' ||
+      process.env.SMTP_ENABLED === 'false' ||
+      process.env.DISABLE_SMTP === 'true';
+
     const user = process.env.SMTP_USER || process.env.GMAIL_USER;
     const pass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
 
-    if (!user || !pass) {
-      console.warn('[Notify Login] Missing SMTP_USER or SMTP_PASS environment variables');
-      return res.json({ success: false, message: 'SMTP credentials not configured' });
+    if (isSmtpDisabled || !user || !pass) {
+      return res.json({ success: true, message: 'SMTP disabled or unconfigured' });
     }
 
+    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const port = parseInt(process.env.SMTP_PORT || '587', 10);
     const transporter = createStandardTransporter(host, port, user, pass);
 
     await transporter.sendMail({
@@ -1824,8 +1832,7 @@ app.post('/api/auth/notify-login', async (req, res) => {
 
     return res.json({ success: true });
   } catch (err: any) {
-    console.warn('[Notify Login] Error sending notification email:', err.message || err);
-    return res.status(500).json({ error: err.message || 'Failed to send notification email' });
+    return res.json({ success: false, message: 'Email notification skipped' });
   }
 });
 

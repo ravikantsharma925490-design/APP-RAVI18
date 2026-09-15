@@ -153,7 +153,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         },
       });
 
-      setAvatarUrl(newUrl);
+      if (newUrl) {
+        // Preload image so it switches seamlessly with zero visual flicker
+        await new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(true);
+          img.onerror = () => resolve(true);
+          img.src = newUrl;
+        });
+        setAvatarUrl(newUrl);
+      }
+
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
     } catch (err: any) {
@@ -360,7 +370,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   avatarFileInputRef.current?.click();
                 }
               }}
-              className={cn('relative mb-3 group shrink-0 w-24 h-24 rounded-3xl overflow-hidden shadow-lg border-4 border-neutral-100 dark:border-neutral-800', isEditingSelf && 'cursor-pointer')}
+              className={cn('relative mb-3 group shrink-0 w-24 h-24 rounded-3xl overflow-hidden shadow-lg border-4 border-neutral-100 dark:border-neutral-800 bg-neutral-200 dark:bg-neutral-800', isEditingSelf && 'cursor-pointer')}
               title={isEditingSelf ? 'Click to change profile picture' : undefined}
             >
               {(isEditingSelf ? avatarUrl : targetUser.avatar_url) ? (
