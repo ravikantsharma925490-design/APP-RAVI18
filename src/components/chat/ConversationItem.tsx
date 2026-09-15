@@ -103,6 +103,16 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       return caption ? `📷 Photo: ${caption}` : '📷 Photo';
     }
 
+    if (lastMsg.content.startsWith('[VIDEO:') && lastMsg.content.endsWith(']')) {
+      const inside = lastMsg.content.slice(7, -1);
+      const colonIdx = inside.lastIndexOf(':');
+      let caption = '';
+      if (colonIdx !== -1 && !inside.startsWith('data:video')) {
+        caption = inside.slice(colonIdx + 1);
+      }
+      return caption ? `🎥 Video: ${caption}` : '🎥 Video';
+    }
+
     if (lastMsg.content.startsWith('[VOICE:') && lastMsg.content.endsWith(']')) {
       return '🎙️ Voice note';
     }

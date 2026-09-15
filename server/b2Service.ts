@@ -288,7 +288,7 @@ export async function getB2ObjectStream(b2Key: string): Promise<{
       contentLength: response.ContentLength,
     };
   } catch (err) {
-    console.warn(`[Backblaze B2 Stream Warning] Could not fetch ${b2Key}:`, err);
+    console.warn(`[Backblaze B2 Stream Notice] ${b2Key}: ${(err as any)?.message || err}. Serving from server local storage.`);
     return null;
   }
 }

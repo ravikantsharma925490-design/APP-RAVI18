@@ -17,6 +17,32 @@ import {
 
 dotenv.config();
 
+// Helper: Create Render-Safe SMTP Transporter (Forces IPv4 to prevent ENETUNREACH)
+function createStandardTransporter(host?: string, port?: number, user?: string, pass?: string) {
+  const targetHost = host || process.env.SMTP_HOST || 'smtp.gmail.com';
+  const targetPort = port || parseInt(process.env.SMTP_PORT || '587', 10);
+  const targetUser = user || process.env.SMTP_USER || process.env.GMAIL_USER || '';
+  const targetPass = pass || process.env.SMTP_PASS || process.env.GMAIL_PASS || '';
+
+  const isGmail = targetHost.includes('gmail.com') || targetUser.endsWith('@gmail.com');
+  const finalHost = isGmail ? 'smtp.gmail.com' : targetHost;
+  const finalPort = isGmail ? 587 : targetPort;
+  const isSecure = finalPort === 465;
+
+  return nodemailer.createTransport({
+    host: finalHost,
+    port: finalPort,
+    secure: isSecure,
+    requireTLS: !isSecure,
+    auth: { user: targetUser, pass: targetPass },
+    family: 4, // Force IPv4 socket resolution (prevents ENETUNREACH on Render/Cloud hosts)
+    connectionTimeout: 8000,
+    greetingTimeout: 5000,
+    socketTimeout: 10000,
+    tls: { rejectUnauthorized: false },
+  });
+}
+
 // Helper: Send Ban Email Notification to User's Gmail
 async function sendBanNotificationEmail(toEmail: string, username: string, displayName: string, reason?: string) {
   if (!toEmail || !toEmail.includes('@')) {
@@ -24,31 +50,15 @@ async function sendBanNotificationEmail(toEmail: string, username: string, displ
     return false;
   }
 
-  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = parseInt(process.env.SMTP_PORT || '587', 10);
   const user = process.env.SMTP_USER || process.env.GMAIL_USER;
   const pass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
 
-  let transporter;
-  if (user && pass) {
-    transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: port === 465,
-      auth: { user, pass },
-    });
-  } else {
-    transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: user || 'support@liveconnect.app',
-        pass: pass || 'placeholder_pass',
-      },
-      tls: { rejectUnauthorized: false }
-    });
+  if (!user || !pass) {
+    console.warn('[Ban Email] Missing SMTP credentials');
+    return false;
   }
+
+  const transporter = createStandardTransporter();
 
   const htmlContent = `
 <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; background-color: #0a0a0a; border-radius: 16px; color: #ffffff; border: 1px solid #262626;">
@@ -114,8 +124,6 @@ async function sendBanNotificationEmail(toEmail: string, username: string, displ
 async function sendOtpEmail(toEmail: string, otpCode: string) {
   if (!toEmail || !toEmail.includes('@')) return false;
 
-  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = parseInt(process.env.SMTP_PORT || '587', 10);
   const user = process.env.SMTP_USER || process.env.GMAIL_USER;
   const pass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
 
@@ -124,23 +132,7 @@ async function sendOtpEmail(toEmail: string, otpCode: string) {
     return false;
   }
 
-  const isGmail = host.includes('gmail.com') || user.endsWith('@gmail.com');
-
-  const transporter = nodemailer.createTransport(
-    isGmail
-      ? {
-          service: 'gmail',
-          auth: { user, pass },
-          tls: { rejectUnauthorized: false },
-        }
-      : {
-          host,
-          port,
-          secure: port === 465,
-          auth: { user, pass },
-          tls: { rejectUnauthorized: false },
-        }
-  );
+  const transporter = createStandardTransporter();
 
   const formattedCode = String(otpCode).trim();
 
@@ -1809,22 +1801,7 @@ app.post('/api/auth/notify-login', async (req, res) => {
       return res.json({ success: false, message: 'SMTP credentials not configured' });
     }
 
-    const isGmail = host.includes('gmail.com') || user.endsWith('@gmail.com');
-    const transporter = nodemailer.createTransport(
-      isGmail
-        ? {
-            service: 'gmail',
-            auth: { user, pass },
-            tls: { rejectUnauthorized: false },
-          }
-        : {
-            host,
-            port,
-            secure: port === 465,
-            auth: { user, pass },
-            tls: { rejectUnauthorized: false },
-          }
-    );
+    const transporter = createStandardTransporter(host, port, user, pass);
 
     await transporter.sendMail({
       from: `"LiveConnect Security" <${user}>`,

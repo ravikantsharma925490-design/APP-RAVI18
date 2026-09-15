@@ -1042,7 +1042,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         /* Render Photo / Image Attachment */
         <div
           className={cn(
-            'rounded-2xl shadow-xs overflow-hidden max-w-[280px] sm:max-w-[340px] border transition-all',
+            'rounded-2xl shadow-xs overflow-hidden w-[280px] sm:w-[320px] border transition-all',
             isMine
               ? 'bg-blue-600 text-white rounded-br-xs border-blue-500'
               : 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 border-neutral-200/90 dark:border-neutral-700/60 rounded-bl-xs'
@@ -1050,7 +1050,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         >
           <div
             onClick={() => onViewImage?.(imageUrl, imageCaption)}
-            className="relative cursor-pointer group/img overflow-hidden"
+            className="relative cursor-pointer group/img overflow-hidden w-full min-h-[180px] bg-neutral-900/10 dark:bg-neutral-800/50 flex items-center justify-center"
           >
             <img
               src={imageUrl}
@@ -1093,18 +1093,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         /* Render Video Attachment */
         <div
           className={cn(
-            'rounded-2xl shadow-xs overflow-hidden max-w-[280px] sm:max-w-[360px] border transition-all',
+            'rounded-2xl shadow-xs overflow-hidden w-[280px] sm:w-[340px] border transition-all',
             isMine
               ? 'bg-blue-600 text-white rounded-br-xs border-blue-500'
               : 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 border-neutral-200/90 dark:border-neutral-700/60 rounded-bl-xs'
           )}
         >
-          <div className="relative overflow-hidden bg-black/90">
+          <div className="relative overflow-hidden bg-black/95 aspect-video min-h-[190px] w-full flex items-center justify-center">
             <video
               src={videoUrl}
               controls
               preload="metadata"
-              className="w-full max-h-80 object-contain rounded-t-2xl"
+              className="w-full h-full object-contain rounded-t-2xl"
             />
           </div>
 
