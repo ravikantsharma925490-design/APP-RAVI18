@@ -32,6 +32,7 @@ import { WORLD_COUNTRIES } from '@/src/lib/worldData';
 import { FollowButton, FollowStatus } from './FollowButton';
 import { FollowsListModal } from './FollowsListModal';
 import { replaceProfilePictureInB2, removeProfilePictureFromB2 } from '@/src/lib/b2Client';
+import { UserAvatar } from '@/src/components/ui/UserAvatar';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -373,22 +374,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               className={cn('relative mb-3 group shrink-0 w-24 h-24 rounded-3xl overflow-hidden shadow-lg border-4 border-neutral-100 dark:border-neutral-800 bg-neutral-200 dark:bg-neutral-800', isEditingSelf && 'cursor-pointer')}
               title={isEditingSelf ? 'Click to change profile picture' : undefined}
             >
-              {(isEditingSelf ? avatarUrl : targetUser.avatar_url) ? (
-                <img
-                  src={isEditingSelf ? avatarUrl : (targetUser.avatar_url as string)}
-                  alt="Avatar"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div
-                  className={cn(
-                    'w-full h-full flex items-center justify-center font-bold text-2xl text-white',
-                    getAvatarColor(targetUser.id)
-                  )}
-                >
-                  {getInitials(targetUser.display_name)}
-                </div>
-              )}
+              <UserAvatar
+                src={isEditingSelf ? avatarUrl : (targetUser.avatar_url as string)}
+                name={targetUser.display_name}
+                id={targetUser.id}
+                className="w-full h-full rounded-2xl"
+              />
 
               {/* Uploading Spinner Overlay */}
               {avatarUploading && (

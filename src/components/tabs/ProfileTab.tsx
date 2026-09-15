@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Profile } from '@/src/types';
 import { cn, getAvatarColor, getInitials, formatJoinedYear } from '@/src/lib/utils';
+import { UserAvatar } from '../ui/UserAvatar';
 import { useLanguage } from '@/src/lib/LanguageContext';
 import { HelpCenter } from '../profile/HelpCenter';
 import { COUNTRIES, GENDER_OPTIONS } from '../profile/ProfileModal';
@@ -178,25 +179,14 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
 
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 relative z-10 text-center sm:text-left">
               {/* Profile Avatar */}
-              <div className="relative">
-                {currentUser.avatar_url ? (
-                  <img
-                    src={currentUser.avatar_url}
-                    alt={currentUser.display_name}
-                    className="w-24 h-24 rounded-3xl object-cover border-2 border-white dark:border-neutral-800 shadow-md"
-                  />
-                ) : (
-                  <div
-                    className={cn(
-                      'w-24 h-24 rounded-3xl flex items-center justify-center font-extrabold text-2xl shadow-md',
-                      getAvatarColor(currentUser.id)
-                    )}
-                  >
-                    {getInitials(currentUser.display_name)}
-                  </div>
-                )}
-                <span className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-white dark:border-neutral-900 shadow-xs" />
-              </div>
+              <UserAvatar
+                src={currentUser.avatar_url}
+                name={currentUser.display_name}
+                id={currentUser.id}
+                className="w-24 h-24 rounded-3xl border-2 border-white dark:border-neutral-800 shadow-md"
+                showStatus
+                isOnline={true}
+              />
 
               {/* User Bio Details */}
               <div className="min-w-0 flex-1 space-y-1.5">

@@ -2,6 +2,7 @@ import React from 'react';
 import { MessageSquare, Search, Phone, User, Radio, LogOut, Bell, Globe } from 'lucide-react';
 import { cn, getAvatarColor, getInitials } from '@/src/lib/utils';
 import { Profile } from '@/src/types';
+import { UserAvatar } from '../ui/UserAvatar';
 import { useLanguage } from '@/src/lib/LanguageContext';
 import { TabType } from './BottomNav';
 
@@ -175,25 +176,14 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             onClick={() => onChangeTab('profile')}
             className="flex items-center gap-2.5 min-w-0 p-1.5 rounded-xl hover:bg-neutral-200/60 dark:hover:bg-neutral-800/60 transition-colors text-left flex-1 group cursor-pointer"
           >
-            <div className="relative shrink-0">
-              {currentUser.avatar_url ? (
-                <img
-                  src={currentUser.avatar_url}
-                  alt={currentUser.display_name}
-                  className="w-9 h-9 rounded-full object-cover border border-neutral-300 dark:border-neutral-700"
-                />
-              ) : (
-                <div
-                  className={cn(
-                    'w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-xs',
-                    getAvatarColor(currentUser.id)
-                  )}
-                >
-                  {getInitials(currentUser.display_name)}
-                </div>
-              )}
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-neutral-900" />
-            </div>
+            <UserAvatar
+              src={currentUser.avatar_url}
+              name={currentUser.display_name}
+              id={currentUser.id}
+              className="w-9 h-9 border border-neutral-300 dark:border-neutral-700"
+              showStatus
+              isOnline={true}
+            />
 
             <div className="min-w-0 flex-1">
               <h4 className="text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate group-hover:text-blue-600 transition-colors">

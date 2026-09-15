@@ -2,6 +2,7 @@ import React from 'react';
 import { Conversation } from '@/src/types';
 import { cn, formatDate, getAvatarColor, getInitials } from '@/src/lib/utils';
 import { Check, CheckCheck, Trash2, Phone, Video, PhoneMissed, PhoneOutgoing, PhoneIncoming } from 'lucide-react';
+import { UserAvatar } from '@/src/components/ui/UserAvatar';
 
 interface ConversationItemProps {
   conversation: Conversation;
@@ -140,34 +141,14 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       )}
     >
       {/* Avatar with presence dot */}
-      <div className="relative shrink-0">
-        {avatarUrl ? (
-          <img
-            src={avatarUrl}
-            alt={displayName}
-            className="w-12 h-12 rounded-full object-cover border border-black/10 dark:border-white/10"
-          />
-        ) : (
-          <div
-            className={cn(
-              'w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm shadow-sm',
-              isSelected ? 'bg-white/20 text-white' : getAvatarColor(otherUser?.id || conversation.id)
-            )}
-          >
-            {getInitials(displayName)}
-          </div>
-        )}
-
-        {/* Online Indicator */}
-        <span
-          className={cn(
-            'absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2',
-            isSelected ? 'border-blue-600' : 'border-white dark:border-neutral-900',
-            isOnline ? 'bg-emerald-500' : 'bg-neutral-400'
-          )}
-          title={isOnline ? 'Online' : 'Offline'}
-        />
-      </div>
+      <UserAvatar
+        src={avatarUrl}
+        name={displayName}
+        id={otherUser?.id || conversation.id}
+        className="w-12 h-12 border border-black/10 dark:border-white/10"
+        showStatus
+        isOnline={isOnline}
+      />
 
       {/* Info */}
       <div className="flex-1 min-w-0">

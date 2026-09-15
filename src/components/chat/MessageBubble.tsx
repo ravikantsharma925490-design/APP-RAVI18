@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Message, Profile, CallType } from '@/src/types';
 import { cn, formatTime, getAvatarColor, getInitials } from '@/src/lib/utils';
+import { UserAvatar } from '../ui/UserAvatar';
 import {
   Check,
   CheckCheck,
@@ -645,24 +646,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         )}
       >
         {!isMine && showAvatar && (
-          <div className="shrink-0 mb-1">
-            {message.sender?.avatar_url ? (
-              <img
-                src={message.sender.avatar_url}
-                alt={message.sender.display_name}
-                className="w-7 h-7 rounded-full object-cover shadow-xs"
-              />
-            ) : (
-              <div
-                className={cn(
-                  'w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] shadow-xs',
-                  getAvatarColor(message.sender_id)
-                )}
-              >
-                {getInitials(message.sender?.display_name || 'U')}
-              </div>
-            )}
-          </div>
+          <UserAvatar
+            src={message.sender?.avatar_url}
+            name={message.sender?.display_name || 'User'}
+            id={message.sender_id}
+            className="w-7 h-7 mb-1 shadow-xs"
+          />
         )}
 
         {isMine && (
@@ -929,24 +918,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     >
       {/* Left Avatar for receiver */}
       {!isMine && showAvatar && (
-        <div className="shrink-0 mb-1">
-          {message.sender?.avatar_url ? (
-            <img
-              src={message.sender.avatar_url}
-              alt={message.sender.display_name}
-              className="w-7 h-7 rounded-full object-cover shadow-xs"
-            />
-          ) : (
-            <div
-              className={cn(
-                'w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] shadow-xs',
-                getAvatarColor(message.sender_id)
-              )}
-            >
-              {getInitials(message.sender?.display_name || 'U')}
-            </div>
-          )}
-        </div>
+        <UserAvatar
+          src={message.sender?.avatar_url}
+          name={message.sender?.display_name || 'User'}
+          id={message.sender_id}
+          className="w-7 h-7 mb-1 shadow-xs"
+        />
       )}
 
       {/* Options Menu for Sender */}

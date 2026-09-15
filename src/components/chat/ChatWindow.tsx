@@ -26,6 +26,7 @@ import { ImageViewerModal } from './ImageViewerModal';
 import { ChatSkeleton } from '../ui/LoadingSkeleton';
 import { EmptyState } from '../ui/EmptyState';
 import { cn, formatLastSeen, getAvatarColor, getInitials } from '@/src/lib/utils';
+import { UserAvatar } from '../ui/UserAvatar';
 import { useMessages } from '@/src/hooks/useMessages';
 
 interface ChatWindowProps {
@@ -359,29 +360,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           {/* User Avatar */}
           <div
             onClick={() => otherUser && onOpenProfileView?.(otherUser)}
-            className="relative cursor-pointer shrink-0"
+            className="cursor-pointer shrink-0"
           >
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt={displayName}
-                className="w-10 h-10 rounded-full object-cover border border-neutral-200 dark:border-neutral-700"
-              />
-            ) : (
-              <div
-                className={cn(
-                  'w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm text-white',
-                  getAvatarColor(otherUser?.id || conversation.id)
-                )}
-              >
-                {getInitials(displayName)}
-              </div>
-            )}
-            <span
-              className={cn(
-                'absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white dark:border-neutral-900',
-                isOnline ? 'bg-emerald-500' : 'bg-neutral-400'
-              )}
+            <UserAvatar
+              src={avatarUrl}
+              name={displayName}
+              id={otherUser?.id || conversation.id}
+              className="w-10 h-10 border border-neutral-200 dark:border-neutral-700"
+              showStatus
+              isOnline={isOnline}
             />
           </div>
 
