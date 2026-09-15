@@ -118,6 +118,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
 
+  // Ref to track modal open transitions
+  const prevOpenRef = useRef(false);
+
   const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentUser) return;
@@ -127,6 +130,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setErrorMessage('Profile picture size must be 5 MB or less.');
       return;
     }
+
+    // Instant local preview for zero-delay visual response
+    const localPreviewUrl = URL.createObjectURL(file);
+    setAvatarUrl(localPreviewUrl);
 
     setAvatarUploading(true);
     setErrorMessage(null);
@@ -150,7 +157,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to upload profile picture to Backblaze B2.');
+      setErrorMessage(err.message || 'Failed to upload profile picture.');
     } finally {
       setAvatarUploading(false);
     }
@@ -243,9 +250,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     };
   }, [username, isOpen, isEditingSelf, currentUser]);
 
-  // Sync state when modal opens or currentUser changes
+  // Sync state ONLY when modal opens or target user ID changes
   useEffect(() => {
-    if (currentUser && isEditingSelf) {
+    if (currentUser && isEditingSelf && (isOpen && !prevOpenRef.current)) {
       setDisplayName(currentUser.display_name || '');
       setUsername(currentUser.username || '');
       setBio(currentUser.bio || '');
@@ -254,7 +261,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       setAvatarUrl(currentUser.avatar_url || '');
       setErrorMessage(null);
     }
-  }, [currentUser, isEditingSelf, isOpen]);
+    prevOpenRef.current = isOpen;
+  }, [currentUser?.id, isEditingSelf, isOpen]);
 
   if (!isOpen || !targetUser) return null;
 

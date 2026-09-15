@@ -71,10 +71,16 @@ function cleanAndDeduplicateMessages(msgs: Message[], convId: string | null): Me
       });
     }
 
-    // 3. Duplicate standard message (same sender + identical content within 45 seconds)
+    // 3. Duplicate standard message (ONLY merge if one of them is a temporary/local optimistic message)
     if (existingIdx === -1 && m.sender_id && m.content) {
       existingIdx = deduplicated.findIndex((prev) => {
         if (prev.sender_id !== m.sender_id || prev.content !== m.content) return false;
+        const isOneTemp =
+          prev.id.startsWith('temp_') ||
+          prev.id.startsWith('local_') ||
+          m.id.startsWith('temp_') ||
+          m.id.startsWith('local_');
+        if (!isOneTemp) return false;
         const timeDiff = Math.abs(
           new Date(prev.created_at || 0).getTime() - new Date(m.created_at || 0).getTime()
         );

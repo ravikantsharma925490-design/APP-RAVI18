@@ -42,9 +42,27 @@ export function validateFileSize(sizeInBytes: number, category: MediaCategory): 
  * Initialize S3 Client for Backblaze B2 (Server-Side Only)
  */
 export function getB2S3Client(): { client: S3Client; bucketName: string; customUrlBase: string } | null {
-  const rawKeyId = process.env.B2_APPLICATION_KEY_ID || process.env.B2_KEY_ID || '005f24e4c71bd080000000001';
-  const rawAppKey = process.env.B2_APPLICATION_KEY || process.env.B2_APPLICATION_KEY_SECRET || 'K005JT6K0FFVjBi4yHY2VlsYvmMXeuA';
-  const rawBucketName = process.env.B2_BUCKET_NAME || process.env.B2_BUCKET || 'liveconnect';
+  const rawKeyId =
+    process.env.B2_APPLICATION_KEY_ID ||
+    process.env.B2_KEY_ID ||
+    process.env.B2_ACCESS_KEY_ID ||
+    process.env.BACKBLAZE_KEY_ID ||
+    process.env.BACKBLAZE_APPLICATION_KEY_ID ||
+    '005f24e4c71bd080000000001';
+
+  const rawAppKey =
+    process.env.B2_APPLICATION_KEY ||
+    process.env.B2_APPLICATION_KEY_SECRET ||
+    process.env.B2_SECRET_KEY ||
+    process.env.B2_APP_KEY ||
+    process.env.BACKBLAZE_APPLICATION_KEY ||
+    'K005JT6K0FFVjBi4yHY2VlsYvmMXeuA';
+
+  const rawBucketName =
+    process.env.B2_BUCKET_NAME ||
+    process.env.B2_BUCKET ||
+    process.env.BACKBLAZE_BUCKET ||
+    'liveconnect';
   if (!rawKeyId || !rawAppKey) {
     return null;
   }
@@ -58,7 +76,7 @@ export function getB2S3Client(): { client: S3Client; bucketName: string; customU
     return null;
   }
 
-  let rawEndpoint = process.env.B2_ENDPOINT;
+  let rawEndpoint = process.env.B2_ENDPOINT || process.env.B2_S3_ENDPOINT || process.env.BACKBLAZE_ENDPOINT;
   if (!rawEndpoint) {
     // Auto-derive endpoint cluster from B2 Key ID prefix if available
     const keyPrefix = keyId.substring(0, 3);
