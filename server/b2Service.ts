@@ -212,10 +212,10 @@ export async function uploadBufferToB2(options: {
       });
 
       await client.send(putCommand);
-      // Keep publicUrl as /api/b2/file/... so even private bucket files stream perfectly
+      console.log(`[Backblaze B2 Success] Uploaded to bucket '${bucketName}' key: ${b2Key} (${buffer.length} bytes)`);
       publicUrl = `/api/b2/file/${encodeURIComponent(b2Key)}`;
     } catch (b2Err: any) {
-      // Quietly fallback to server media endpoint
+      console.error(`[Backblaze B2 Upload Error] Key '${b2Key}':`, b2Err?.message || b2Err);
       publicUrl = `/api/b2/file/${encodeURIComponent(b2Key)}`;
     }
   }
