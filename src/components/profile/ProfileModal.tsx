@@ -348,23 +348,23 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           <div className="flex flex-col items-center">
             <div
               onClick={() => {
-                if (isEditingSelf) {
+                if (isEditingSelf && !avatarUploading) {
                   avatarFileInputRef.current?.click();
                 }
               }}
-              className={cn('relative mb-3 group', isEditingSelf && 'cursor-pointer')}
+              className={cn('relative mb-3 group shrink-0 w-24 h-24 rounded-3xl overflow-hidden shadow-lg border-4 border-neutral-100 dark:border-neutral-800', isEditingSelf && 'cursor-pointer')}
               title={isEditingSelf ? 'Click to change profile picture' : undefined}
             >
               {(isEditingSelf ? avatarUrl : targetUser.avatar_url) ? (
                 <img
                   src={isEditingSelf ? avatarUrl : (targetUser.avatar_url as string)}
                   alt="Avatar"
-                  className="w-24 h-24 rounded-3xl object-cover border-4 border-neutral-100 dark:border-neutral-800 shadow-lg"
+                  className="w-full h-full object-cover"
                 />
               ) : (
                 <div
                   className={cn(
-                    'w-24 h-24 rounded-3xl flex items-center justify-center font-bold text-2xl shadow-lg border-4 border-neutral-100 dark:border-neutral-800 text-white',
+                    'w-full h-full flex items-center justify-center font-bold text-2xl text-white',
                     getAvatarColor(targetUser.id)
                   )}
                 >
@@ -372,9 +372,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 </div>
               )}
 
+              {/* Uploading Spinner Overlay */}
+              {avatarUploading && (
+                <div className="absolute inset-0 bg-black/70 backdrop-blur-xs flex flex-col items-center justify-center text-white z-20 transition-all">
+                  <Loader2 className="w-7 h-7 animate-spin text-blue-400" />
+                  <span className="text-[10px] font-bold text-neutral-200 mt-1">Uploading...</span>
+                </div>
+              )}
+
               {/* Camera Hover Overlay when editing self */}
-              {isEditingSelf && (
-                <div className="absolute inset-0 rounded-3xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+              {isEditingSelf && !avatarUploading && (
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white z-10">
                   <Camera className="w-6 h-6" />
                 </div>
               )}
@@ -382,7 +390,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               {/* Online Indicator */}
               <span
                 className={cn(
-                  'absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-white dark:border-neutral-900 z-10',
+                  'absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-white dark:border-neutral-900 z-30',
                   isTargetOnline ? 'bg-emerald-500 shadow-sm' : 'bg-neutral-400'
                 )}
                 title={isTargetOnline ? 'Online' : 'Offline'}
@@ -474,7 +482,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             )}
 
             {isEditingSelf && (
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2 min-h-[38px]">
                 <input
                   ref={avatarFileInputRef}
                   type="file"

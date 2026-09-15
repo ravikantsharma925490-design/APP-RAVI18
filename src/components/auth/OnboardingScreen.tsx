@@ -205,30 +205,42 @@ export function OnboardingScreen({
           />
 
           <div
-            onClick={() => fileInputRef.current?.click()}
-            className="relative group cursor-pointer"
+            onClick={() => {
+              if (!uploadingPhoto) fileInputRef.current?.click();
+            }}
+            className="relative group cursor-pointer shrink-0 w-24 h-24 rounded-2xl overflow-hidden bg-neutral-800 border-2 border-blue-500/50 shadow-lg shadow-blue-500/10 group-hover:border-blue-400 transition-all"
             title="Click to upload profile photo"
           >
-            <div className="w-24 h-24 rounded-2xl bg-neutral-800 border-2 border-blue-500/50 overflow-hidden flex items-center justify-center shadow-lg shadow-blue-500/10 group-hover:border-blue-400 transition-all">
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt="Profile Photo"
-                  className="w-full h-full object-cover"
-                  onError={() => setAvatarUrl('')}
-                />
-              ) : (
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Profile Photo"
+                className="w-full h-full object-cover"
+                onError={() => setAvatarUrl('')}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
                 <User className="w-10 h-10 text-neutral-400" />
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Uploading Spinner Overlay */}
+            {uploadingPhoto && (
+              <div className="absolute inset-0 bg-black/70 backdrop-blur-xs flex flex-col items-center justify-center text-white z-20 transition-all">
+                <Loader2 className="w-7 h-7 animate-spin text-blue-400" />
+                <span className="text-[10px] font-bold text-neutral-200 mt-1">Uploading...</span>
+              </div>
+            )}
 
             {/* Camera Overlay Badge */}
-            <div className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-              <Camera className="w-6 h-6" />
-            </div>
+            {!uploadingPhoto && (
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white z-10">
+                <Camera className="w-6 h-6" />
+              </div>
+            )}
 
-            {prefillAvatar && avatarUrl === prefillAvatar && (
-              <div className="absolute -bottom-1 -right-1 bg-blue-600 text-[10px] font-bold px-2 py-0.5 rounded-full text-white shadow border border-blue-400/40">
+            {prefillAvatar && avatarUrl === prefillAvatar && !uploadingPhoto && (
+              <div className="absolute bottom-1 right-1 bg-blue-600 text-[10px] font-bold px-2 py-0.5 rounded-full text-white shadow border border-blue-400/40 z-30">
                 Google
               </div>
             )}
