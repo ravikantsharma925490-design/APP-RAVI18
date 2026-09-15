@@ -2859,12 +2859,46 @@ app.get('/api/b2/file/*', async (req, res) => {
       return b2StreamData.stream.pipe(res);
     }
 
-    // Local disk fallback
+    // Local disk fallback with full HTTP Range streaming support
     const sanitizedLocalName = b2Key.replace(/\//g, '_');
     const localPath = path.join(process.cwd(), 'uploads', sanitizedLocalName);
     if (fs.existsSync(localPath)) {
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      return res.sendFile(localPath);
+      const stat = fs.statSync(localPath);
+      const fileSize = stat.size;
+      const range = req.headers.range;
+
+      let mimeType = 'video/mp4';
+      if (b2Key.endsWith('.mp3')) mimeType = 'audio/mpeg';
+      else if (b2Key.endsWith('.webm')) mimeType = 'video/webm';
+      else if (b2Key.endsWith('.png')) mimeType = 'image/png';
+      else if (b2Key.endsWith('.jpg') || b2Key.endsWith('.jpeg')) mimeType = 'image/jpeg';
+      else if (b2Key.endsWith('.gif')) mimeType = 'image/gif';
+
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunksize = end - start + 1;
+        const file = fs.createReadStream(localPath, { start, end });
+        const head = {
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunksize,
+          'Content-Type': mimeType,
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        };
+        res.writeHead(206, head);
+        return file.pipe(res);
+      } else {
+        const head = {
+          'Content-Length': fileSize,
+          'Content-Type': mimeType,
+          'Accept-Ranges': 'bytes',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        };
+        res.writeHead(200, head);
+        return fs.createReadStream(localPath).pipe(res);
+      }
     }
 
     return res.status(404).send('File not found');

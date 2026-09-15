@@ -72,7 +72,7 @@ export function getB2S3Client(): { client: S3Client; bucketName: string; customU
   const applicationKey = rawAppKey.trim().replace(/^["']|["']$/g, '');
   const bucketName = rawBucketName.trim().replace(/^["']|["']$/g, '');
 
-  if (!keyId || !applicationKey) {
+  if (!keyId || !applicationKey || keyId === '005f24e4c71bd080000000001') {
     return null;
   }
 
