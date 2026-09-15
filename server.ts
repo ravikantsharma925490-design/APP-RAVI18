@@ -2850,12 +2850,15 @@ app.get('/api/b2/file/*', async (req, res) => {
       return res.status(400).send('File key required');
     }
 
-    // Try streaming directly from Backblaze B2 bucket
-    const b2StreamData = await getB2ObjectStream(b2Key);
+    // Try streaming directly from Backblaze B2 bucket (Handles Private buckets & Range requests)
+    const b2StreamData = await getB2ObjectStream(b2Key, req.headers.range);
     if (b2StreamData && b2StreamData.stream) {
       if (b2StreamData.contentType) res.setHeader('Content-Type', b2StreamData.contentType);
       if (b2StreamData.contentLength) res.setHeader('Content-Length', b2StreamData.contentLength);
+      if (b2StreamData.contentRange) res.setHeader('Content-Range', b2StreamData.contentRange);
+      res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.status(b2StreamData.statusCode || (req.headers.range ? 206 : 200));
       return b2StreamData.stream.pipe(res);
     }
 

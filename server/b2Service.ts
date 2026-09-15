@@ -196,7 +196,7 @@ export async function uploadBufferToB2(options: {
 
   // Upload to real Backblaze B2 bucket if credentials present
   if (b2Config) {
-    const { client, bucketName, customUrlBase } = b2Config;
+    const { client, bucketName } = b2Config;
     try {
       const putCommand = new PutObjectCommand({
         Bucket: bucketName,
@@ -212,9 +212,10 @@ export async function uploadBufferToB2(options: {
       });
 
       await client.send(putCommand);
-      publicUrl = `${customUrlBase}/${b2Key}`;
+      // Keep publicUrl as /api/b2/file/... so even private bucket files stream perfectly
+      publicUrl = `/api/b2/file/${encodeURIComponent(b2Key)}`;
     } catch (b2Err: any) {
-      // Quietly fallback to server media endpoint so profile photos and chat attachments always succeed seamlessly
+      // Quietly fallback to server media endpoint
       publicUrl = `/api/b2/file/${encodeURIComponent(b2Key)}`;
     }
   }
@@ -267,12 +268,17 @@ export async function deleteObjectFromB2(b2Key: string): Promise<boolean> {
 }
 
 /**
- * Fetch object stream from Backblaze B2
+ * Fetch object stream from Backblaze B2 (Supports Range requests for videos)
  */
-export async function getB2ObjectStream(b2Key: string): Promise<{
+export async function getB2ObjectStream(
+  b2Key: string,
+  rangeHeader?: string
+): Promise<{
   stream: any;
   contentType?: string;
   contentLength?: number;
+  contentRange?: string;
+  statusCode?: number;
 } | null> {
   const b2Config = getB2S3Client();
   if (!b2Config) return null;
@@ -281,12 +287,15 @@ export async function getB2ObjectStream(b2Key: string): Promise<{
     const getCommand = new GetObjectCommand({
       Bucket: b2Config.bucketName,
       Key: b2Key,
+      Range: rangeHeader,
     });
     const response = await b2Config.client.send(getCommand);
     return {
       stream: response.Body,
       contentType: response.ContentType,
       contentLength: response.ContentLength,
+      contentRange: response.ContentRange,
+      statusCode: response.$metadata.httpStatusCode || (rangeHeader ? 206 : 200),
     };
   } catch (err) {
     return null;
