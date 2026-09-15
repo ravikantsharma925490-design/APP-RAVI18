@@ -23,21 +23,31 @@ function extractUrlFromJwt(token: string): string | null {
 const FALLBACK_URL = 'https://slvojojyssepcarxlmfd.supabase.co';
 const FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsdm9qb2p5c3NlcGNhcnhsbWZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MTkzMTEsImV4cCI6MjEwMjQ5NTMxMX0.9ZVwwycoPtNKo7zQXgkuGnz4xBqnAfUvtHGb47rR0A8';
 
-function isValidHttpUrl(str: string): boolean {
-  if (!str || typeof str !== 'string') return false;
-  const trimmed = str.trim();
-  return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+function sanitizeUrl(str?: string | null): string {
+  if (!str || typeof str !== 'string') return '';
+  return str.trim().replace(/^["']|["']$/g, '');
+}
+
+function isValidHttpUrl(str?: string | null): boolean {
+  const clean = sanitizeUrl(str);
+  if (!clean) return false;
+  try {
+    const parsed = new URL(clean);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && Boolean(parsed.hostname);
+  } catch {
+    return false;
+  }
 }
 
 export function getSupabaseConfig(): { url: string; anonKey: string; isConfigured: boolean } {
-  const rawEnvUrl = (import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL || '') as string;
-  const rawEnvKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '') as string;
+  const rawEnvUrl = sanitizeUrl((import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL || '') as string);
+  const rawEnvKey = sanitizeUrl((import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '') as string);
   
-  const envUrl = isValidHttpUrl(rawEnvUrl) ? rawEnvUrl.trim() : FALLBACK_URL;
-  const envKey = rawEnvKey ? rawEnvKey.trim() : FALLBACK_KEY;
+  const envUrl = isValidHttpUrl(rawEnvUrl) ? rawEnvUrl : FALLBACK_URL;
+  const envKey = rawEnvKey || FALLBACK_KEY;
 
-  const savedUrl = typeof window !== 'undefined' ? (localStorage.getItem(STORAGE_URL_KEY) || '').trim() : '';
-  const savedKey = typeof window !== 'undefined' ? (localStorage.getItem(STORAGE_KEY_KEY) || '').trim() : '';
+  const savedUrl = sanitizeUrl(typeof window !== 'undefined' ? localStorage.getItem(STORAGE_URL_KEY) : '');
+  const savedKey = sanitizeUrl(typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_KEY) : '');
 
   if (savedUrl && !isValidHttpUrl(savedUrl)) {
     if (typeof window !== 'undefined') localStorage.removeItem(STORAGE_URL_KEY);

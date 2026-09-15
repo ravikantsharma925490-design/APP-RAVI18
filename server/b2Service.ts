@@ -42,16 +42,25 @@ export function validateFileSize(sizeInBytes: number, category: MediaCategory): 
  * Initialize S3 Client for Backblaze B2 (Server-Side Only)
  */
 export function getB2S3Client(): { client: S3Client; bucketName: string; customUrlBase: string } | null {
-  const keyId = process.env.B2_APPLICATION_KEY_ID || process.env.B2_KEY_ID;
-  const applicationKey = process.env.B2_APPLICATION_KEY || process.env.B2_APPLICATION_KEY_SECRET;
-  const bucketName = process.env.B2_BUCKET_NAME || process.env.B2_BUCKET || 'liveconnect-media';
+  const rawKeyId = process.env.B2_APPLICATION_KEY_ID || process.env.B2_KEY_ID || '005f24e4c71bd080000000001';
+  const rawAppKey = process.env.B2_APPLICATION_KEY || process.env.B2_APPLICATION_KEY_SECRET || 'K005JT6K0FFVjBi4yHY2VlsYvmMXeuA';
+  const rawBucketName = process.env.B2_BUCKET_NAME || process.env.B2_BUCKET || 'liveconnect';
   const rawEndpoint = process.env.B2_ENDPOINT || 's3.us-west-004.backblazeb2.com';
+
+  if (!rawKeyId || !rawAppKey) {
+    return null;
+  }
+
+  // Clean keyId and applicationKey (remove accidental quotes or whitespace)
+  const keyId = rawKeyId.trim().replace(/^["']|["']$/g, '');
+  const applicationKey = rawAppKey.trim().replace(/^["']|["']$/g, '');
+  const bucketName = rawBucketName.trim().replace(/^["']|["']$/g, '');
 
   if (!keyId || !applicationKey) {
     return null;
   }
 
-  let endpoint = rawEndpoint.trim();
+  let endpoint = rawEndpoint.trim().replace(/^["']|["']$/g, '');
   if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
     endpoint = `https://${endpoint}`;
   }
@@ -76,7 +85,7 @@ export function getB2S3Client(): { client: S3Client; bucketName: string; customU
   });
 
   const customUrlBase = process.env.B2_CUSTOM_URL
-    ? process.env.B2_CUSTOM_URL.replace(/\/$/, '')
+    ? process.env.B2_CUSTOM_URL.trim().replace(/^["']|["']$/g, '').replace(/\/$/, '')
     : `${endpoint}/${bucketName}`;
 
   return { client, bucketName, customUrlBase };

@@ -263,22 +263,33 @@ function extractUrlFromJwt(token?: string): string | null {
 const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsdm9qb2p5c3NlcGNhcnhsbWZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MTkzMTEsImV4cCI6MjEwMjQ5NTMxMX0.9ZVwwycoPtNKo7zQXgkuGnz4xBqnAfUvtHGb47rR0A8';
 const DEFAULT_SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsdm9qb2p5c3NlcGNhcnhsbWZkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjkxOTMxMSwiZXhwIjoyMTAyNDk1MzExfQ.1TdeTWik_5eU7D_I-TY-';
 
-const SUPABASE_ANON_KEY = (process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY).trim();
-const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || DEFAULT_SUPABASE_SERVICE_ROLE_KEY).trim();
+function isServerValidHttpUrl(str?: string | null): boolean {
+  if (!str || typeof str !== 'string') return false;
+  const clean = str.trim().replace(/^["']|["']$/g, '');
+  try {
+    const parsed = new URL(clean);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && Boolean(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
 
-let rawUrl = (process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
-if (!rawUrl || (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) || rawUrl.includes('your-supabase-project') || rawUrl.includes('placeholder')) {
+const SUPABASE_ANON_KEY = (process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY).trim().replace(/^["']|["']$/g, '');
+const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || DEFAULT_SUPABASE_SERVICE_ROLE_KEY).trim().replace(/^["']|["']$/g, '');
+
+let rawUrl = (process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/^["']|["']$/g, '');
+if (!isServerValidHttpUrl(rawUrl) || rawUrl.includes('your-supabase-project') || rawUrl.includes('placeholder')) {
   rawUrl = extractUrlFromJwt(SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY) || 'https://slvojojyssepcarxlmfd.supabase.co';
 }
 const SUPABASE_URL = rawUrl;
 
 // Safe wrapper for Supabase client creation to guarantee valid URL
 function safeCreateClient(url: string, key: string, options?: any) {
-  let cleanUrl = (url || '').trim();
-  if (!cleanUrl || (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) || cleanUrl.includes('placeholder')) {
+  let cleanUrl = (url || '').trim().replace(/^["']|["']$/g, '');
+  if (!isServerValidHttpUrl(cleanUrl) || cleanUrl.includes('placeholder')) {
     cleanUrl = extractUrlFromJwt(key) || 'https://slvojojyssepcarxlmfd.supabase.co';
   }
-  const cleanKey = (key || '').trim() || DEFAULT_SUPABASE_ANON_KEY;
+  const cleanKey = (key || '').trim().replace(/^["']|["']$/g, '') || DEFAULT_SUPABASE_ANON_KEY;
   try {
     return createClient(cleanUrl, cleanKey, options);
   } catch (err) {
